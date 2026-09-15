@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: opentofu/setup-opentofu@v1
+      - uses: opentofu/setup-opentofu@v2
       - name: tofu fmt -check
         run: find tofu -mindepth 1 -maxdepth 1 -type d -exec tofu fmt -check -recursive {} \; || tofu fmt -check -recursive tofu
       - name: tofu validate (per module)
