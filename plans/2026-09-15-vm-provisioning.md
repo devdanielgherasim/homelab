@@ -22,9 +22,10 @@ existing template — it doesn't build one from an ISO.
       the environment (verified live in WSL2, see environment findings
       below for what it took to get there)
 - [x] Docs: `tofu/README.md`, `ansible/README.md`, `STATUS.md` updated
-- [ ] User runs the Ansible template role, then `tofu init`/`plan`/`apply`
-      against the real host — not done by this session (destructive/real
-      infra, needs the user present)
+- [x] User ran the Ansible template role, then `tofu init`/`plan`/`apply`
+      against the real host (2026-09-16) — `Apply complete! Resources: 4
+      added, 0 changed, 0 destroyed.` All 4 VMs verified: ping + SSH +
+      `cloud-init status` = `done` on `vpn01`/`cp01`/`worker01`/`worker02`.
 
 ## Environment findings worth keeping
 
@@ -57,14 +58,53 @@ existing template — it doesn't build one from an ISO.
   `PROXMOX_VE_API_TOKEN` env vars; the provider's open disk-resize-on-clone
   issues (documented as a caveat, not silently risked).
 
-## Explicitly NOT done
+## Real-host rollout (2026-09-16) — three RBAC gaps found via actual 403s, fixed one at a time
 
-Neither the Ansible template role nor `tofu apply` has been run against
-the real host — both require the user present (real infra changes,
-`tofu apply` is explicitly gated by `AGENTS.md`'s destructive-action
-policy). `tofu plan` (read-only) is a reasonable next step for the user
-to run themselves once `terraform.tfvars` is filled in and the template
-exists.
+`tofu apply` failed three separate times against the real host, each with
+a different `403 Permission check failed`, each root-caused via live
+verification (not guessed) and fixed in `ansible/roles/proxmox_bootstrap/tasks/api_token.yml`:
+
+1. **`VM.Clone` on `/vms/9000`** — the `api_token` stage's original ACL
+   grant (`pveum acl modify / --users ... --roles PVEVMAdmin`) only
+   granted the role to the **user**. The token was created with
+   `--privsep 1`, which makes its effective permissions the
+   *intersection* of the user's ACLs and the token's own ACLs — with no
+   ACL on the token principal (`opentofu@pve!tofu`) itself, that
+   intersection was empty. Fixed: grant the same role to the token too
+   (`pveum acl modify / -token 'user!token' -role ...`).
+2. **`Datastore.AllocateSpace` on `/storage/local-lvm`** — `PVEVMAdmin`
+   does not include this privilege; it's a separate Proxmox permission
+   namespace, confirmed against a matching Proxmox forum thread about
+   disk resizing. Fixed: additionally granted `PVEDatastoreUser` on
+   `/storage/<datastore_id>`, to both user and token.
+3. **`SDN.Use` on `/sdn/zones/localnetwork/vmbr0`** — Proxmox VE 9
+   introduced SDN-layer permission checks even for the default Linux
+   bridge (`vmbr0` lives in the built-in `localnetwork` zone). Neither of
+   the above roles covers it. Fixed: additionally granted `PVESDNUser` on
+   `/sdn/zones/<zone>`, to both user and token — `PVESDNUser` confirmed as
+   the correct built-in role via live search, not invented.
+
+Deliberately did NOT grant the "kitchen sink" custom role from the
+`bpg/proxmox` provider's own example docs (~40 privileges, explicitly
+labeled "most likely too excessive for most use cases" in that doc) —
+kept to the three narrowly-scoped built-in roles actually exercised by
+this workflow, consistent with the project's least-privilege stance.
+
+Also found: `vpn01` (1GB RAM) showed high memory usage during first boot
+— cloud-init's first-run work (user/network setup, package operations)
+is genuinely heavy relative to 1GB. Resolved on its own (cloud-init
+`status: done`, SSH confirmed) — the Proxmox UI's memory percentage
+likely counted reclaimable page cache, not real pressure. Not resized;
+flagged here in case it recurs on a future rebuild.
+
+Also found: a `for ip in ...; do ... $ip ...; done` shell loop run
+through `wsl.exe -d Ubuntu-24.04 -- bash -c '...'` from this session
+silently emptied `$ip` on every iteration (loop count was right, variable
+value wasn't) — root-caused by testing a minimal reproduction
+(`echo "ip is [$ip]"`) before assuming the fix. Worked around by using
+one explicit non-looped SSH command per host instead of chasing the
+interpolation bug further; each of the 4 VMs was still verified
+individually.
 
 ## Design decisions (not ADR-worthy — implementation detail, not a fork with real alternatives)
 

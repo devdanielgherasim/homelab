@@ -87,7 +87,10 @@ part of cloning.
 
 ## Status
 
-`proxmox-vm` module + `homelab` environment: generated, statically
-validated (`tofu fmt -check`, `tofu validate` both pass for the module
-and the environment). **Not yet applied against real infrastructure** —
-see [`../STATUS.md`](../STATUS.md).
+`proxmox-vm` module + `homelab` environment: **deployed and verified**.
+`tofu apply` run against `pve01` on 2026-09-16 — all 4 VMs created and
+confirmed reachable (ping, SSH, `cloud-init status`). Required a custom
+Proxmox RBAC fix beyond `PVEVMAdmin` alone — see
+`ansible/roles/proxmox_bootstrap/tasks/api_token.yml` and
+`plans/2026-09-15-vm-provisioning.md`. See [`../STATUS.md`](../STATUS.md)
+for full per-VM state.

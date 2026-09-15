@@ -27,6 +27,14 @@ proxmox_bootstrap_opentofu_pve_tokenid: "tofu"
 # not Administrator/PVEAdmin. Adjust to the least privilege your OpenTofu
 # module actually needs once it exists.
 proxmox_bootstrap_opentofu_pve_role: "PVEVMAdmin"
+# PVEVMAdmin does not include Datastore.AllocateSpace (separate Proxmox
+# permission namespace) — needed to actually clone a VM's disk. Keep
+# datastore_id in sync with tofu/modules/proxmox-vm/'s datastore_id default.
+proxmox_bootstrap_datastore_id: "local-lvm"
+proxmox_bootstrap_opentofu_datastore_role: "PVEDatastoreUser"
+# Proxmox VE 9's SDN layer checks SDN.Use even for the default bridge.
+proxmox_bootstrap_sdn_zone: "localnetwork"
+proxmox_bootstrap_opentofu_sdn_role: "PVESDNUser"
 
 # --- ssh_key_add tag: safe, additive (adds a key, doesn't remove access) ---
 # Path to the PUBLIC key only, on the machine running Ansible. The

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-15 (VM template role + OpenTofu module added).
+Last updated: 2026-09-16 (all 4 VMs deployed and verified).
 
 State legend: **PLANNED** (designed, not built) · **IMPLEMENTED** (code/config
 exists, statically validated) · **VALIDATED** (tested against a real or
@@ -8,8 +8,10 @@ representative environment) · **DEPLOYED** (running in the actual homelab).
 
 ## Current focus
 
-Repository bootstrap: engineering environment, documentation structure, CI,
-and AI-agent configuration. **No infrastructure has been provisioned yet.**
+Phase 1 (Foundation) is functionally complete: Proxmox host bootstrapped,
+Ubuntu 24.04 template built, all 4 VMs (`vpn01`, `cp01`, `worker01`,
+`worker02`) created and verified reachable. Moving into Phase 2/3: guest
+OS hardening and Kubernetes bootstrap.
 
 ## Component status
 
@@ -17,13 +19,14 @@ and AI-agent configuration. **No infrastructure has been provisioned yet.**
 |---|---|---|
 | Repository structure / docs / CI | IMPLEMENTED | This bootstrap. |
 | Architecture design | PLANNED | `docs/architecture/`, ported from prior design doc. |
-| Proxmox host | DEPLOYED | Physically installed (Proxmox VE 9.2), now under Ansible-managed configuration (see below) — VM provisioning still manual/pending. |
+| Proxmox host | DEPLOYED | Physically installed (Proxmox VE 9.2), under Ansible-managed configuration, now hosting 4 provisioned VMs (see below). |
 | Proxmox bootstrap (network check, API token, SSH key, firewall) | DEPLOYED | `ansible/roles/proxmox_bootstrap/`, all 6 stages run against `pve01` by the user and verified: dedicated OpenTofu API token created, admin SSH key added, firewall rules applied, SSH password auth disabled — confirmed by a direct key-only SSH test after lockdown. One real bug found and fixed mid-rollout: `template` can't write directly to `/etc/pve` (pmxcfs, non-POSIX — worked around with stage-to-`/tmp`-then-`cp`); a fragile `regex_replace`-derived private-key path silently pointed at the `.pub` file instead (replaced with an explicit variable). See `plans/2026-09-15-proxmox-bootstrap-role.md`. |
-| Proxmox VM template (Ubuntu 24.04 cloud-init, VMID 9000) | IMPLEMENTED | `ansible/roles/proxmox_template/` — generated, `ansible-lint` (production profile) and `--syntax-check` pass. Not yet run. |
-| `vpn01` (Tailscale gateway) | PLANNED | OpenTofu module ready (see below); not applied. |
-| `cp01` / `worker01` / `worker02` | PLANNED | OpenTofu module ready (see below); not applied. |
-| OpenTofu Proxmox provisioning | IMPLEMENTED | `tofu/modules/proxmox-vm/` + `tofu/environments/homelab/` (provider `bpg/proxmox` v0.113.1) — `tofu fmt -check` and `tofu validate` both pass (verified live in WSL2). **Not applied** — no VM has been created yet. Known caveat: provider has open issues around disk-resize-on-clone, documented in the module's README. |
-| Ansible node configuration | PLANNED | `ansible/` has `proxmox_bootstrap` (deployed) and `proxmox_template` (see above); kubeadm/guest-hardening roles not started. |
+| Proxmox VM template (Ubuntu 24.04 cloud-init, VMID 9000) | DEPLOYED | `ansible/roles/proxmox_template/` run against `pve01`; `qm config 9000` confirmed complete (`template: 1`, disk + cloud-init drive attached, agent enabled). |
+| `vpn01` (Tailscale gateway) | DEPLOYED | VMID 101, `192.168.1.50`. Cloud-init `status: done`, SSH verified with the admin key, hostname confirmed. Tailscale itself not yet configured — VM exists, gateway role not yet set up. |
+| `cp01` | DEPLOYED | VMID 102, `192.168.1.51`. Cloud-init `status: done`, SSH verified. Kubernetes not yet installed on it. |
+| `worker01` / `worker02` | DEPLOYED | VMIDs 103/104, `192.168.1.52`/`.53`. Cloud-init `status: done` on both, SSH verified. Kubernetes not yet installed. |
+| OpenTofu Proxmox provisioning | DEPLOYED | `tofu apply` run against `pve01` — `Apply complete! Resources: 4 added, 0 changed, 0 destroyed.` All 4 VMs verified reachable (ping + SSH + `cloud-init status`). Non-fatal QEMU-agent IP-report timeout warning during apply, confirmed cosmetic (SSH access unaffected). Three real Proxmox RBAC gaps found and fixed during rollout — `PVEVMAdmin` alone isn't enough for a clone: also needed `PVEDatastoreUser` on `/storage/local-lvm` (`Datastore.AllocateSpace`) and `PVESDNUser` on `/sdn/zones/localnetwork` (`SDN.Use`, a PVE 9-specific check), each granted to both the user and the token (API tokens with `--privsep 1` need ACLs on the token principal, not just the user — the two are intersected, not unioned). See `ansible/roles/proxmox_bootstrap/tasks/api_token.yml` and `plans/2026-09-15-vm-provisioning.md`. |
+| Ansible node configuration | PLANNED | `ansible/` has `proxmox_bootstrap` and `proxmox_template` (both deployed); kubeadm/guest-hardening roles for the 4 VMs not started. |
 | Kubernetes bootstrap (kubeadm) | PLANNED | — |
 | Cilium / Hubble | PLANNED | — |
 | MetalLB | PLANNED | — |
@@ -48,18 +51,17 @@ Observability → Automation).
 
 ## Next milestone
 
-Phase 1 — Foundation, remaining:
+Phase 1 — Foundation: **done** (2026-09-16). Proxmox bootstrapped,
+template built, all 4 VMs deployed and verified.
 
-1. ~~Run `ansible/roles/proxmox_bootstrap/` against the real Proxmox
-   host~~ — done 2026-09-15, verified (key-only SSH confirmed working).
-2. **Human action**: run `ansible/roles/proxmox_template/`
-   (`playbooks/proxmox-template.yml`) to build the Ubuntu 24.04 template —
-   not yet run.
-3. **Human action**: `cp terraform.tfvars.example terraform.tfvars` in
-   `tofu/environments/homelab/`, fill in real values, export
-   `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`, then `tofu plan` and
-   review before `tofu apply` — see `tofu/README.md`. Depends on step 2.
-4. Ansible guest-hardening + containerd/kubeadm-prerequisite roles for
-   the VMs once they exist.
+Phase 2/3 — Remote access + Kubernetes bootstrap, next:
+
+1. `vpn01`: install and configure Tailscale, advertise the
+   `192.168.1.0/24` subnet — see `docs/architecture/networking.md`.
+2. Ansible guest-hardening role for all 4 VMs (SSH keys, disable password
+   auth, unattended-upgrades or equivalent) — none of the 4 have this yet,
+   they're using the template's cloud-init defaults only.
+3. containerd + kubeadm prerequisites on `cp01`/`worker01`/`worker02`,
+   then `kubeadm init`/`join`.
 
 Tracked in `plans/`.

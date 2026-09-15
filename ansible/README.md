@@ -104,7 +104,9 @@ playbooks/proxmox-template.yml`.
 
 ## Status
 
-`proxmox_bootstrap`: deployed and verified against `pve01`. `proxmox_template`:
-generated, statically validated (`ansible-lint` production profile
-passes, `--syntax-check` passes), **not yet run**. See
+`proxmox_bootstrap` and `proxmox_template`: both deployed and verified
+against `pve01`. The `api_token` stage needed a follow-up fix
+(3 Proxmox RBAC namespaces, not just `PVEVMAdmin`) found via real `tofu
+apply` 403s — see the header comment in
+`roles/proxmox_bootstrap/tasks/api_token.yml`. See
 [`../STATUS.md`](../STATUS.md).

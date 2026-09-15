@@ -7,6 +7,20 @@ proxmox_bootstrap_firewall_allowed_mgmt_cidrs: []
 proxmox_bootstrap_opentofu_pve_user: "opentofu@pve"
 proxmox_bootstrap_opentofu_pve_tokenid: "tofu"
 proxmox_bootstrap_opentofu_pve_role: "PVEVMAdmin"
+# PVEVMAdmin does NOT include Datastore.AllocateSpace (a separate
+# permission namespace, documented Proxmox gap — confirmed against the
+# Proxmox forum, not assumed) — PVEDatastoreUser on the datastore actually
+# used by tofu/modules/proxmox-vm/ (its datastore_id default) covers it.
+# Keep these two in sync if either changes.
+proxmox_bootstrap_datastore_id: "local-lvm"
+proxmox_bootstrap_opentofu_datastore_role: "PVEDatastoreUser"
+# Proxmox VE 9's SDN layer checks SDN.Use even for the default Linux
+# bridge (vmbr0 lives in the built-in "localnetwork" zone) — confirmed
+# via a real 403 during rollout, not assumed. PVESDNUser is the matching
+# built-in role. Keep this zone name in sync with tofu/modules/proxmox-vm/'s
+# bridge default if that ever changes from vmbr0/localnetwork.
+proxmox_bootstrap_sdn_zone: "localnetwork"
+proxmox_bootstrap_opentofu_sdn_role: "PVESDNUser"
 proxmox_bootstrap_admin_ssh_pubkey_path: "~/.ssh/homelab_admin_ed25519.pub"
 # Explicit, not derived from the pubkey path via regex — a regex_replace
 # on a Jinja expression inside a YAML block scalar is fragile (backslash
