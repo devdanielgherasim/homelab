@@ -1,0 +1,11 @@
+profile: production
+
+exclude_paths:
+  - .cache/
+  - .terraform/
+  - node_modules/
+
+skip_list: []
+
+warn_list:
+  - experimental

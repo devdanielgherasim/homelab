@@ -1,0 +1,18 @@
+name: Task
+description: A piece of planned work (roadmap phase, feature, chore)
+labels: ["task"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be done
+      description: Reference the relevant docs/architecture/*.md, ADR, or STATUS.md row if applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Definition of done
+      description: See AGENTS.md's Definition of Done. Be specific about what "done" means for this task.
+    validations:
+      required: true

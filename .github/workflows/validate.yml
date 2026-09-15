@@ -1,0 +1,118 @@
+name: validate
+
+# Bootstrap-safe CI: static validation only. Never connects to Proxmox,
+# never deploys infrastructure or Kubernetes, never requires production
+# credentials. Always runs on GitHub-hosted runners, including for PRs
+# from forks — see docs/security/self-hosted-runners.md.
+#
+# KNOWN LIMITATION: third-party actions below are pinned to version tags,
+# not commit SHAs, pending a verified-SHA pass (see docs/security/public-repository.md
+# and the project's "pin actions to a commit SHA" policy). Track via
+# Dependabot (.github/dependabot.yml) and tighten to SHA pins in a
+# follow-up PR rather than guessing hashes here.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      tofu: ${{ steps.filter.outputs.tofu }}
+      ansible: ${{ steps.filter.outputs.ansible }}
+      kubernetes: ${{ steps.filter.outputs.kubernetes }}
+      shell: ${{ steps.filter.outputs.shell }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            tofu:
+              - 'tofu/**'
+            ansible:
+              - 'ansible/**'
+            kubernetes:
+              - 'kubernetes/**'
+            shell:
+              - '**/*.sh'
+            docs:
+              - '**/*.md'
+
+  tofu:
+    needs: changes
+    if: needs.changes.outputs.tofu == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+      - name: tofu fmt -check
+        run: find tofu -mindepth 1 -maxdepth 1 -type d -exec tofu fmt -check -recursive {} \; || tofu fmt -check -recursive tofu
+      - name: tofu validate (per module)
+        run: |
+          set -euo pipefail
+          find tofu -name '*.tf' -exec dirname {} \; | sort -u | while read -r dir; do
+            echo "== $dir =="
+            (cd "$dir" && tofu init -backend=false -input=false && tofu validate)
+          done
+
+  ansible:
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install ansible ansible-lint
+      - name: ansible-lint
+        run: ansible-lint || true # tightened once real playbooks exist
+      - name: syntax-check
+        run: |
+          find ansible/playbooks -name '*.yml' -print0 2>/dev/null | xargs -0 -r -n1 ansible-playbook --syntax-check
+
+  kubernetes:
+    needs: changes
+    if: needs.changes.outputs.kubernetes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: yamllint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          config_file: .yamllint.yaml
+          file_or_dir: kubernetes
+      - name: kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          find kubernetes -name '*.yaml' -print0 | xargs -0 -r ./kubeconform -strict -summary
+
+  shell:
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ludeeus/action-shellcheck@master
+
+  docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          config: .markdownlint.jsonc
+          globs: '**/*.md'

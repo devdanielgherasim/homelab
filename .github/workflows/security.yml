@@ -1,0 +1,51 @@
+name: security
+
+# Bootstrap-safe security scanning: secret detection + IaC config scan.
+# GitHub-hosted runners only, no homelab credentials, no deployment.
+# See docs/security/public-repository.md.
+#
+# KNOWN LIMITATION: see validate.yml — action pins are version tags, not
+# commit SHAs, pending a verified-SHA follow-up.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1' # weekly, Monday 06:00 UTC — catches drift/new CVEs, not just new commits
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — a secret in an old commit still matters
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  trivy-config:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # scoped to this job only, for SARIF upload
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy config scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: '.'
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '0' # report-only until findings are triaged; tighten later
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif

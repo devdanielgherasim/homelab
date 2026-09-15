@@ -1,0 +1,9 @@
+{
+  // Keep this permissive — the goal is catching broken structure, not
+  // enforcing a house style. Full ruleset: https://github.com/DavidAnson/markdownlint
+  "default": true,
+  "MD013": false,   // line length — prose wraps naturally, not enforced
+  "MD033": false,   // inline HTML — used for details/diagrams occasionally
+  "MD041": false,   // first line doesn't have to be a top-level heading (frontmatter etc.)
+  "MD024": { "siblings_only": true } // allow duplicate headings across different sections
+}

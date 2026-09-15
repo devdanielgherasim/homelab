@@ -1,0 +1,7 @@
+# Default owner for everything not matched below.
+* @devdanielgherasim
+
+# Security-sensitive paths get explicit review attention.
+/docs/security/ @devdanielgherasim
+/.github/workflows/ @devdanielgherasim
+/.gitleaks.toml @devdanielgherasim

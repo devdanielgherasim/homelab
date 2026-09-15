@@ -1,0 +1,21 @@
+# gitleaks config for a PUBLIC repository.
+# Default ruleset (gitleaks.toml upstream) applies; this file only adds
+# repo-specific allowlisting for known-safe example/placeholder content.
+title = "homelab gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Safe example/placeholder files and generated docs"
+paths = [
+  '''\.example$''',
+  '''\.example\.[a-zA-Z0-9]+$''',
+  '''docs/.*\.md$''',
+]
+
+regexes = [
+  # Documentation-range placeholders (RFC 5737 / RFC 1918 examples), never real secrets.
+  '''YOUR_.*_HERE''',
+  '''CHANGE_ME''',
+]

@@ -1,0 +1,21 @@
+# Fast, local, cheap checks only. Heavy validation (tofu validate,
+# ansible-lint, kubeconform, full-history gitleaks) runs in CI — see
+# .github/workflows/validate.yml and security.yml. Never make an ordinary
+# commit painfully slow.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
