@@ -22,3 +22,20 @@ homelab_vms:
       ansible_host: YOUR_WORKER02_IP_HERE   # e.g. 10.10.10.14
   vars:
     ansible_user: ubuntu
+
+# Sub-groups for kubeadm targeting — vpn01 is NOT a cluster member, only
+# referenced here to group cp01/worker01/worker02, whose ansible_host/
+# ansible_user come from homelab_vms above (no need to repeat them).
+k8s_control_plane:
+  hosts:
+    cp01: {}
+
+k8s_workers:
+  hosts:
+    worker01: {}
+    worker02: {}
+
+k8s_nodes:
+  children:
+    k8s_control_plane: {}
+    k8s_workers: {}

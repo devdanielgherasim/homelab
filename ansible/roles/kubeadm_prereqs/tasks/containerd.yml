@@ -1,0 +1,48 @@
+---
+- name: Add Docker's apt repository (for the containerd.io package)
+  # deb822_repository, not the deprecated apt_repository (removed in
+  # ansible-core 2.25) — confirmed live 2026-09-16, not assumed. It
+  # downloads and stores the signing key itself; no manual gpg --dearmor
+  # step needed.
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/ubuntu
+    suites: "{{ ansible_distribution_release }}"
+    components: stable
+    architectures: "{{ ansible_architecture | replace('x86_64', 'amd64') }}"
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
+  become: true
+
+- name: Install containerd
+  ansible.builtin.apt:
+    name: containerd.io
+    state: present
+    update_cache: true
+  become: true
+
+- name: Generate default containerd config (only if missing)
+  ansible.builtin.command:
+    cmd: sh -c 'containerd config default > /etc/containerd/config.toml'
+  args:
+    creates: /etc/containerd/config.toml
+  become: true
+
+- name: Ensure containerd uses the systemd cgroup driver
+  # Required so containerd and kubelet agree on cgroup management —
+  # otherwise kubelet/pods can fail in confusing ways. Idempotent
+  # regardless of prior file state (unlike a one-time generate+sed).
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^(\s*)SystemdCgroup\s*='
+    line: '\1SystemdCgroup = true'
+    backrefs: true
+  become: true
+  notify: Restart containerd
+
+- name: Enable containerd
+  ansible.builtin.systemd:
+    name: containerd
+    enabled: true
+    state: started
+  become: true

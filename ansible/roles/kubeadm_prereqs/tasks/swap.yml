@@ -1,0 +1,17 @@
+---
+# kubelet refuses to start with swap active. Idempotent either way —
+# swapoff on an already-off system and a no-match fstab edit are both no-ops.
+
+- name: Disable swap now (only if currently active)
+  ansible.builtin.command:
+    cmd: swapoff -a
+  become: true
+  when: ansible_swaptotal_mb | default(0) | int > 0
+  changed_when: true
+
+- name: Remove swap entries from fstab (so it stays off after reboot)
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '\sswap\s'
+    state: absent
+  become: true

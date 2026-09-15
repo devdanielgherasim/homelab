@@ -1,0 +1,72 @@
+---
+# Idempotency here is load-bearing, not optional: `kubeadm init` is not
+# safely re-runnable, and `kubeadm reset` (the only real "undo") is
+# explicitly in AGENTS.md's destructive-action policy — this role never
+# runs it, under any condition.
+
+- name: Check whether this control plane is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_init_admin_conf
+  become: true
+
+- name: Run kubeadm init (only if not already initialized)
+  ansible.builtin.command:
+    cmd: >
+      kubeadm init
+      --pod-network-cidr={{ kubeadm_init_pod_network_cidr }}
+      --apiserver-advertise-address={{ ansible_host }}
+  become: true
+  when: not kubeadm_init_admin_conf.stat.exists
+  changed_when: true
+  register: kubeadm_init_result
+
+# noqa: no-handler — must display immediately after the triggering task
+# in-order (init output is only useful right when it happens), not
+# queued to end-of-play like a handler would be.
+- name: Show kubeadm init output # noqa: no-handler
+  ansible.builtin.debug:
+    var: kubeadm_init_result.stdout_lines
+  when: kubeadm_init_result is changed
+
+- name: Ensure ~/.kube exists for the ubuntu user
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0700"
+  become: true
+
+- name: Copy admin kubeconfig for the ubuntu user
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+  become: true
+
+# Always (re)create a join token, whether or not init just ran — token
+# creation is safe/idempotent (short-lived credential, not cluster
+# state), and kubeadm_join needs one available via hostvars regardless of
+# whether this is a first run or a later re-run adding/fixing a worker.
+- name: Create a fresh join command
+  ansible.builtin.command:
+    cmd: kubeadm token create --print-join-command
+  become: true
+  changed_when: true
+  register: kubeadm_init_join_command_result
+
+- name: Expose the join command to other hosts in this playbook run
+  ansible.builtin.set_fact:
+    kubeadm_init_join_command: "{{ kubeadm_init_join_command_result.stdout }}"
+
+- name: Reminder — NotReady is expected until a CNI is installed
+  ansible.builtin.debug:
+    msg: >-
+      Control plane ready. Node(s) will show NotReady in `kubectl get
+      nodes` until Cilium (or another CNI) is installed — that's
+      expected, not a failure of this role. See
+      docs/architecture/kubernetes.md.

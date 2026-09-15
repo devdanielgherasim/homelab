@@ -1,0 +1,6 @@
+---
+# Kept in sync with kubeadm_init/defaults/main.yml (same value) and
+# docs/architecture/networking.md's documented Cilium pod CIDR — not a
+# fragile cross-role default dependency, deliberately duplicated with
+# this comment instead.
+kubeadm_prereqs_k8s_minor_version: "1.37"

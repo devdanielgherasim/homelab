@@ -1,0 +1,4 @@
+---
+# Kept in sync with kubeadm_prereqs and docs/architecture/networking.md's
+# documented Cilium pod CIDR.
+kubeadm_init_pod_network_cidr: "10.244.0.0/16"

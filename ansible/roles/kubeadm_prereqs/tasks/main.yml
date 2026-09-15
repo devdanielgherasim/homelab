@@ -1,0 +1,12 @@
+---
+- name: Disable swap
+  ansible.builtin.import_tasks: swap.yml
+
+- name: Kernel modules and sysctl
+  ansible.builtin.import_tasks: kernel.yml
+
+- name: Install and configure containerd
+  ansible.builtin.import_tasks: containerd.yml
+
+- name: Install kubeadm/kubelet/kubectl
+  ansible.builtin.import_tasks: kube_packages.yml

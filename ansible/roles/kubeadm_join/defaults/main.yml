@@ -1,0 +1,4 @@
+---
+# The inventory hostname running kubeadm_init, whose hostvars carries
+# the join command this role reads.
+kubeadm_join_control_plane_host: "cp01"

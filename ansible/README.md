@@ -26,11 +26,15 @@ ansible/
 ├── playbooks/
 │   ├── proxmox-bootstrap.yml   # implements installation.md steps 1-4 — see its header before running
 │   ├── proxmox-template.yml    # builds the cloud-init VM template
-│   └── guest-hardening.yml     # SSH hardening + unattended upgrades on the 4 VMs
+│   ├── guest-hardening.yml     # SSH hardening + unattended upgrades on the 4 VMs
+│   └── k8s-bootstrap.yml       # containerd + kubeadm init/join on cp01/worker01/worker02
 └── roles/
     ├── proxmox_bootstrap/      # network check, API token, SSH key, firewall — staged, see below
     ├── proxmox_template/       # builds the Ubuntu 24.04 cloud-init VM template tofu/ clones from
-    └── guest_hardening/        # SSH defense-in-depth + unattended-upgrades on vpn01/cp01/worker01/worker02
+    ├── guest_hardening/        # SSH defense-in-depth + unattended-upgrades on vpn01/cp01/worker01/worker02
+    ├── kubeadm_prereqs/        # containerd, kubeadm/kubelet/kubectl, swap/kernel/sysctl — all k8s nodes
+    ├── kubeadm_init/           # `kubeadm init` — cp01 only
+    └── kubeadm_join/           # `kubeadm join` — worker01/worker02 only
 ```
 
 ## Running from WSL2 against a Windows-mounted repo (`/mnt/e/...`)
@@ -102,6 +106,38 @@ host firewall and, later, Cilium NetworkPolicies are the intended layers,
 not a third one; swap-disable (a kubeadm prerequisite, not hardening —
 next role); `fail2ban` (no clear benefit on LAN-only, key-only SSH).
 
+## The `kubeadm_prereqs` / `kubeadm_init` / `kubeadm_join` roles
+
+Bootstraps a real Kubernetes cluster via `playbooks/k8s-bootstrap.yml`,
+targeting `cp01`/`worker01`/`worker02` (`vpn01` is never a cluster
+member). Three separate roles, not one, because they have different
+idempotency shapes and target different hosts:
+
+- **`kubeadm_prereqs`** (all 3 nodes): swap off, `overlay`/`br_netfilter`
+  kernel modules, sysctl, containerd (Docker's apt repo,
+  `SystemdCgroup = true`), and `kubeadm`/`kubelet`/`kubectl` from
+  `pkgs.k8s.io` (the current repo — the old `apt.kubernetes.io` is dead),
+  held at their installed version via `dpkg_selections` so a stray `apt
+  upgrade` can't silently jump the cluster to a new minor version. Uses
+  `ansible.builtin.deb822_repository`, not the deprecated
+  `apt_repository` (removed in ansible-core 2.25) — it downloads and
+  manages the signing key itself, no manual `gpg --dearmor` step needed.
+- **`kubeadm_init`** (`cp01` only): idempotency here is load-bearing, not
+  optional — `kubeadm init` isn't safely re-runnable, and `kubeadm reset`
+  is explicitly in `AGENTS.md`'s destructive-action policy and is never
+  run by this role. Guarded by checking `/etc/kubernetes/admin.conf`.
+  Always (re)creates a join token afterward regardless (safe/idempotent),
+  exposed to other hosts via `hostvars` for `kubeadm_join`.
+- **`kubeadm_join`** (`worker01`/`worker02`): guarded by checking
+  `/etc/kubernetes/kubelet.conf`; reads the join command from
+  `hostvars['cp01']` — requires `k8s-bootstrap.yml`'s play order
+  (control plane before workers) within the same run.
+
+Pod network CIDR (`10.244.0.0/16`) matches
+[`../docs/architecture/networking.md`](../docs/architecture/networking.md)'s
+documented Cilium pod CIDR. **Nodes will show `NotReady` in `kubectl get
+nodes` until Cilium is installed — expected, not a failure of this role.**
+
 ## Rules
 
 - Real inventory files, vault passwords, and any host-specific variables
@@ -120,11 +156,11 @@ next role); `fail2ban` (no clear benefit on LAN-only, key-only SSH).
 
 ## Status
 
-`proxmox_bootstrap` and `proxmox_template`: both deployed and verified
-against `pve01`. The `api_token` stage needed a follow-up fix
+`proxmox_bootstrap`, `proxmox_template`, and `guest_hardening`: all
+deployed and verified. The `api_token` stage needed a follow-up fix
 (3 Proxmox RBAC namespaces, not just `PVEVMAdmin`) found via real
 OpenTofu apply 403s — see the header comment in
-`roles/proxmox_bootstrap/tasks/api_token.yml`. `guest_hardening`:
-generated, statically validated (`ansible-lint` production profile,
-`--syntax-check` both pass), **not yet run**. See
-[`../STATUS.md`](../STATUS.md).
+`roles/proxmox_bootstrap/tasks/api_token.yml`. `kubeadm_prereqs` /
+`kubeadm_init` / `kubeadm_join`: generated, statically validated
+(`ansible-lint` production profile, `--syntax-check` both pass), **not
+yet run**. See [`../STATUS.md`](../STATUS.md).

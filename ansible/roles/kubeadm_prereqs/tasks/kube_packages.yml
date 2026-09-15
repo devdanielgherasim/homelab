@@ -1,0 +1,46 @@
+---
+- name: Add the Kubernetes apt repository
+  # pkgs.k8s.io, not the deprecated/dead apt.kubernetes.io — and
+  # deb822_repository, not the deprecated apt_repository (removed in
+  # ansible-core 2.25). Both verified live 2026-09-16, not assumed.
+  # Flat repo format (Suites: / with no Components) matches pkgs.k8s.io's
+  # documented one-line "deb ... /" layout. One repo per minor version;
+  # matches kubectl's pin in mise.toml to avoid version skew.
+  ansible.builtin.deb822_repository:
+    name: kubernetes
+    types: deb
+    uris: "https://pkgs.k8s.io/core:/stable:/v{{ kubeadm_prereqs_k8s_minor_version }}/deb/"
+    suites: /
+    signed_by: "https://pkgs.k8s.io/core:/stable:/v{{ kubeadm_prereqs_k8s_minor_version }}/deb/Release.key"
+  become: true
+
+- name: Install kubelet, kubeadm, kubectl
+  ansible.builtin.apt:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    update_cache: true
+  become: true
+
+- name: Hold kubelet/kubeadm/kubectl at their installed version
+  # A stray `apt upgrade` must not silently jump the cluster to a new
+  # Kubernetes minor version — upgrades are a deliberate, separate
+  # procedure, not something that happens by accident.
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+  become: true
+
+- name: Enable kubelet
+  # Starts crash-looping until `kubeadm init`/`join` gives it a config —
+  # expected, not a failure of this task.
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+  become: true

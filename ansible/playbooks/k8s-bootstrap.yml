@@ -1,0 +1,35 @@
+---
+# Bootstraps containerd + kubeadm on cp01/worker01/worker02. vpn01 is not
+# a cluster member and is never targeted here.
+#
+# Play order matters: kubeadm_init must run on the control plane before
+# kubeadm_join runs on the workers, since the join role reads the join
+# command from the control plane's hostvars within this same run.
+#
+# Expect `kubectl get nodes` to show NotReady until Cilium is installed
+# (separate, later step) — that's expected, not a failure here.
+#
+# Example:
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/k8s-bootstrap.yml --private-key ~/.ssh/homelab_admin_ed25519
+
+- name: Install containerd + kubeadm/kubelet/kubectl on all k8s nodes
+  hosts: k8s_nodes
+  become: true
+  gather_facts: true
+  roles:
+    - kubeadm_prereqs
+
+- name: Initialize the control plane
+  hosts: k8s_control_plane
+  become: true
+  gather_facts: true
+  roles:
+    - kubeadm_init
+
+- name: Join worker nodes
+  hosts: k8s_workers
+  become: true
+  gather_facts: true
+  roles:
+    - kubeadm_join
