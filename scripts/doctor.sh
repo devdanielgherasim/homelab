@@ -11,9 +11,14 @@ present=0
 
 check() {
   local name="$1" cmd="$2"
+  # Optional $3: version invocation args (some tools don't take --version —
+  # kubectl/helm use a `version` subcommand, kubeconform uses -v, both
+  # confirmed against real installs, not guessed).
+  local version_args="${3:---version}"
   if command -v "$cmd" >/dev/null 2>&1; then
     local version
-    version="$("$cmd" --version 2>&1 | head -n1)"
+    # shellcheck disable=SC2086 # word-splitting is intentional here
+    version="$("$cmd" $version_args 2>&1 | head -n1)"
     printf "  OK   %-14s %s\n" "$name" "$version"
     present=$((present + 1))
   else
@@ -26,15 +31,15 @@ echo "== Required tooling (see mise.toml for pinned versions) =="
 check "git"          git
 check "gh"           gh
 check "tofu"         tofu
-check "kubectl"      kubectl
-check "helm"         helm
+check "kubectl"      kubectl      "version --client"
+check "helm"         helm         "version"
 check "sops"         sops
 check "age"          age
 check "trivy"        trivy
 check "yamllint"     yamllint
 check "shellcheck"   shellcheck
 check "gitleaks"     gitleaks
-check "kubeconform"  kubeconform
+check "kubeconform"  kubeconform  "-v"
 check "ansible"      ansible
 check "ansible-lint" ansible-lint
 check "pre-commit"   pre-commit

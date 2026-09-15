@@ -17,7 +17,8 @@ curl https://mise.run | sh
 echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc
 source ~/.bashrc
 
-# one-time: mise's pypi/pipx backend (used for yamllint) needs pipx or uv
+# one-time: mise's pypi/pipx backend (used for yamllint, ansible-core,
+# ansible-lint, pre-commit) needs pipx or uv
 # present first, or `mise install` fails on yamllint specifically
 sudo apt update && sudo apt install -y pipx
 
