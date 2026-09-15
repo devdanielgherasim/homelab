@@ -41,4 +41,10 @@ VMs" and `docs/security/threat-model.md`.
 - [x] `--syntax-check` — pass
 - [x] `gitleaks` — clean
 - [x] Docs: `ansible/README.md` updated
-- [ ] User runs it against the real 4 VMs
+- [x] User ran it against the real 4 VMs (2026-09-16) — clean run, `0
+      failed` on all 4 (`cp01`/`vpn01`/`worker01`/`worker02`: `ok=8,
+      changed=4`). Spot-verified on `vpn01`: SSH reachable with the admin
+      key, `PasswordAuthentication no` active, `unattended-upgrades`
+      installed (`dpkg -l` shows `ii`). Other 3 ran the identical task
+      set with the same zero-failure result — not independently
+      re-verified one-by-one beyond the Ansible run itself.
