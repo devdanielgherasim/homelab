@@ -39,6 +39,7 @@ check "ansible"      ansible
 check "ansible-lint" ansible-lint
 check "pre-commit"   pre-commit
 check "mise"         mise
+check "pipx"         pipx
 
 echo
 echo "== Environment =="

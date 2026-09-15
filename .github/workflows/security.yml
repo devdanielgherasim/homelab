@@ -4,8 +4,21 @@ name: security
 # GitHub-hosted runners only, no homelab credentials, no deployment.
 # See docs/security/public-repository.md.
 #
-# KNOWN LIMITATION: see validate.yml — action pins are version tags, not
-# commit SHAs, pending a verified-SHA follow-up.
+# trivy-action is pinned to v0.35.0, NOT @master and NOT any tag below it.
+# On 2026-03-19, a compromised credential was used to force-push malware
+# into 76 of 77 aquasecurity/trivy-action tags (v0.0.1-v0.34.2) and all 7
+# aquasecurity/setup-trivy tags, exfiltrating CI secrets for ~12 hours
+# (CVE-2026-33634 / GHSA-69fq-xp46-6x23). v0.35.0 was the one tag released
+# after remediation and confirmed clean — this is not a routine pin choice,
+# don't "helpfully" bump it to @master or @latest.
+#
+# gitleaks-action is pinned to v3, not v2: GitHub removes Node 20 from
+# GitHub-hosted runners entirely on 2026-09-16 and gitleaks-action@v2
+# (Node 20-based) stops working from that date regardless of any opt-out
+# flag. v3 is a Node 24 runtime bump only — no input/output/behavior change.
+#
+# KNOWN LIMITATION: other action pins below are version tags, not commit
+# SHAs, pending a verified-SHA follow-up — see validate.yml.
 
 on:
   pull_request:
@@ -23,10 +36,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history — a secret in an old commit still matters
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
 
@@ -36,9 +49,9 @@ jobs:
       contents: read
       security-events: write # scoped to this job only, for SARIF upload
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: config
           scan-ref: '.'
@@ -46,6 +59,6 @@ jobs:
           output: trivy-results.sarif
           exit-code: '0' # report-only until findings are triaged; tighten later
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif

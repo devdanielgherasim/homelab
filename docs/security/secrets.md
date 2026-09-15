@@ -26,6 +26,19 @@ would otherwise false-positive. It does not weaken scanning of real config
 files (`*.tfvars`, `*.yaml` outside `*.example`, etc.) — those are excluded
 from Git entirely via `.gitignore`, not allowlisted in gitleaks.
 
+## Why third-party Actions are never pinned to a floating ref
+
+Not a theoretical risk: on 2026-03-19 a compromised maintainer credential
+was used to force-push credential-stealing malware into 76 of 77
+`aquasecurity/trivy-action` tags and all 7 `aquasecurity/setup-trivy` tags
+(CVE-2026-33634 / [GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)).
+Any workflow referencing `@master` or an affected tag during the ~12-hour
+window had its runner's secrets exfiltrated. This repo's
+`security.yml` used `aquasecurity/trivy-action@master` until this was
+caught during local tool bootstrap on 2026-09-15 and corrected to the
+verified-clean `@v0.35.0`. Full SHA pinning (not just avoiding `@master`)
+remains the tracked follow-up — see `validate.yml`'s known-limitation note.
+
 ## GitHub-native protections (manual setup, not automatable from here)
 
 Enabling **secret scanning** and **push protection** on the GitHub repo

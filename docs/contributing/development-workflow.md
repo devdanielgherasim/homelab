@@ -10,8 +10,16 @@ natively from Windows or PowerShell.
 Inside WSL2:
 
 ```bash
-# one-time: install mise (https://mise.jdx.dev)
+# one-time: install mise (https://mise.jdx.dev) — do NOT use
+# `sudo snap install mise`: it requires --classic confinement (unrestricted
+# system access), unnecessary for a user-space tool install.
 curl https://mise.run | sh
+echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc
+source ~/.bashrc
+
+# one-time: mise's pypi/pipx backend (used for yamllint) needs pipx or uv
+# present first, or `mise install` fails on yamllint specifically
+sudo apt update && sudo apt install -y pipx
 
 # clone and enter the repo (or use the Windows-side clone via /mnt/e/...)
 cd homelab

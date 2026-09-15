@@ -60,6 +60,28 @@ design was presented and approved in-session before implementation.
   flagged as needing a `research-brief`/Perplexity check before being
   trusted, rather than presented as freshly verified.
 
+## Post-bootstrap corrections (2026-09-15, during real `mise install` on fresh WSL2 Ubuntu 24.04)
+
+First real tool install surfaced two bootstrap mistakes, both fixed same-day:
+
+1. **`trivy = "0.57.1"` in `mise.toml` didn't exist** (404) — corrected to
+   `0.74.0` after a live version check.
+2. **`aquasecurity/trivy-action@master` in `security.yml`** — while
+   researching the correct trivy version, found this project had a real
+   supply-chain compromise (CVE-2026-33634, 2026-03-19): 76/77
+   `trivy-action` tags and all `setup-trivy` tags were hijacked to steal
+   CI secrets. `@master` was exactly the wrong kind of pin. Corrected to
+   `@v0.35.0` (the verified-clean post-incident release); documented in
+   `security.yml` and `docs/security/secrets.md` so it isn't "helpfully"
+   reverted later. Also caught and fixed the same floating-ref pattern on
+   `ludeeus/action-shellcheck@master` → `@2.0.0` in `validate.yml`.
+
+Also added: `pipx` as a documented prerequisite (`mise`'s pypi backend
+needs it for `yamllint`) in `development-workflow.md` and `doctor.sh`.
+
+This is the concrete argument for the "flagged, not blindly trusted"
+approach taken at bootstrap — the flags did their job.
+
 ## Notes
 
 - Original `docs/homelab-architecture.docx` (containing the real router
