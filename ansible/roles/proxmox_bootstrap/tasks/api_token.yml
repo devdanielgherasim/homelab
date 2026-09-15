@@ -1,0 +1,69 @@
+---
+# Additive, idempotent, no lockout risk. Creates a dedicated, least-
+# privilege PVE user + API token for OpenTofu — never root, never your
+# interactive login. Uses the `pveum` CLI directly on the host rather than
+# a community.general Proxmox module, to avoid needing proxmoxer/requests
+# on the controller for a one-time bootstrap step.
+#
+# The token secret is shown by Proxmox exactly once, at creation. This
+# playbook does not write it to disk or to Git anywhere — it's printed to
+# your terminal (no_log on the creating task keeps it out of any saved
+# Ansible log) and it is YOUR responsibility to store it immediately in
+# GitHub Actions Secrets / a local secrets manager, per
+# docs/security/public-repository.md. If you lose it, delete the token
+# and re-run this tag to issue a new one — there is no way to retrieve an
+# existing token's secret again.
+
+- name: Check whether the OpenTofu PVE user already exists
+  ansible.builtin.command:
+    cmd: "pveum user list --output-format json"
+  register: proxmox_bootstrap_pve_users
+  changed_when: false
+
+- name: Create OpenTofu PVE user (if missing)
+  ansible.builtin.command:
+    cmd: >
+      pveum user add {{ proxmox_bootstrap_opentofu_pve_user }}
+      --comment "OpenTofu provisioning — managed by ansible/roles/proxmox_bootstrap, see docs/proxmox/installation.md"
+  when: >-
+    proxmox_bootstrap_opentofu_pve_user not in
+    (proxmox_bootstrap_pve_users.stdout | from_json | map(attribute='userid') | list)
+  changed_when: true
+
+- name: Grant least-privilege role on / to the OpenTofu user
+  ansible.builtin.command:
+    cmd: >
+      pveum acl modify / --users {{ proxmox_bootstrap_opentofu_pve_user }}
+      --roles {{ proxmox_bootstrap_opentofu_pve_role }}
+  changed_when: true
+
+- name: Check whether the OpenTofu API token already exists
+  ansible.builtin.command:
+    cmd: "pveum user token list {{ proxmox_bootstrap_opentofu_pve_user }} --output-format json"
+  register: proxmox_bootstrap_pve_tokens
+  changed_when: false
+
+- name: Create OpenTofu API token (shown once — save it immediately)
+  ansible.builtin.command:
+    cmd: >
+      pveum user token add {{ proxmox_bootstrap_opentofu_pve_user }}
+      {{ proxmox_bootstrap_opentofu_pve_tokenid }} --privsep 1 --output-format json
+  register: proxmox_bootstrap_pve_token_create
+  no_log: true
+  changed_when: true
+  when: >-
+    proxmox_bootstrap_opentofu_pve_tokenid not in
+    (proxmox_bootstrap_pve_tokens.stdout | from_json | map(attribute='tokenid') | list)
+
+# noqa: no-handler — this deliberately isn't a handler: it must run
+# immediately, in-order, right after the token is created (a handler runs
+# at end-of-play, which would separate the secret display from the
+# moment it's relevant and could interleave with other host output).
+- name: Print the new token — COPY THIS NOW, it will not be shown again # noqa: no-handler
+  ansible.builtin.debug:
+    msg: "{{ proxmox_bootstrap_pve_token_create.stdout }}"
+  when: proxmox_bootstrap_pve_token_create is changed
+  # deliberately NOT no_log on this one task — you need to see it once;
+  # store it in GitHub Actions Secrets or a local secrets manager
+  # immediately, per docs/security/public-repository.md, then close this
+  # terminal.

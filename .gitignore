@@ -18,11 +18,19 @@ crash.log
 crash.*.log
 
 # --- Ansible ---
+# NOTE: patterns below use a leading **/ so they match at any nesting
+# depth (e.g. ansible/inventories/production/hosts.yml) — a pattern
+# starting with a bare directory name like "inventories/..." (no leading
+# **/) is anchored to the repo root in gitignore semantics and would
+# silently NOT match this nested path. Verified with `git add -A -n`
+# before every commit that touches ansible/inventories/, not assumed.
 *.retry
 .vault_password
 *vault-pass*
-inventories/**/hosts.yml
-!inventories/**/hosts.example.yml
+**/inventories/**/hosts.yml
+!**/inventories/**/hosts.example.yml
+**/inventories/**/group_vars/*.yml
+!**/inventories/**/group_vars/*.yml.example
 
 # --- Secrets / keys / credentials ---
 .env

@@ -1,0 +1,17 @@
+{# Managed by ansible/roles/proxmox_bootstrap — see docs/proxmox/installation.md.
+   Do not edit by hand; changes will be overwritten on the next Ansible run. #}
+[OPTIONS]
+enable: 1
+policy_in: {{ pve_firewall_policy_in }}
+policy_out: ACCEPT
+
+[RULES]
+{% for cidr in proxmox_bootstrap_firewall_allowed_mgmt_cidrs %}
+IN ACCEPT -source {{ cidr }} -p tcp -dport 22 -log nolog   # SSH from management CIDR
+IN ACCEPT -source {{ cidr }} -p tcp -dport 8006 -log nolog # Proxmox web UI from management CIDR
+{% endfor %}
+IN ACCEPT -p icmp -log nolog                                # ping, for reachability checks
+{# Proxmox also ships a built-in anti-lockout rule that keeps management
+   access reachable even when policy_in is DROP — this file's explicit
+   rules are defense in depth on top of that, not the only safety net.
+   See: https://pve.proxmox.com/wiki/Firewall #}

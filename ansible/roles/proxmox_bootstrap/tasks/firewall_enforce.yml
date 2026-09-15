@@ -1,0 +1,66 @@
+---
+# RISKY stage — only reachable with explicit --tags firewall_enforce (see
+# roles/proxmox_bootstrap/tasks/main.yml's 'never' tag). Switches
+# policy_in from ACCEPT to DROP. Run this ONLY after firewall_rules has
+# been applied and you've manually confirmed SSH/web UI access still
+# works from your management network.
+#
+# Proxmox's built-in anti-lockout rule (https://pve.proxmox.com/wiki/Firewall)
+# keeps management access reachable even under DROP — but this stage
+# still asks for explicit confirmation before proceeding, because "there's
+# a safety net" is not the same as "skip verifying."
+
+- name: Require explicit confirmation before enforcing deny-by-default
+  ansible.builtin.pause:
+    prompt: >-
+      About to set policy_in=DROP on {{ inventory_hostname }}.
+      Have you already confirmed SSH and the web UI work with the
+      firewall_rules stage applied? Type 'yes' to proceed, anything else
+      aborts.
+  register: proxmox_bootstrap_confirm_enforce
+
+- name: Abort if not confirmed
+  ansible.builtin.meta: end_play
+  when: proxmox_bootstrap_confirm_enforce.user_input | lower != 'yes'
+
+- name: Render host.fw (policy_in=DROP) to a staging path
+  # /etc/pve is pmxcfs (a FUSE filesystem) — see the matching comment in
+  # firewall_rules.yml for why this can't template directly into place.
+  ansible.builtin.template:
+    src: host.fw.j2
+    dest: "/tmp/proxmox_bootstrap_host.fw"
+    mode: "0600"
+  vars:
+    pve_firewall_policy_in: "DROP"
+  changed_when: false
+
+- name: Copy staged host.fw into place on pmxcfs
+  ansible.builtin.command:
+    cmd: "cp /tmp/proxmox_bootstrap_host.fw /etc/pve/nodes/{{ proxmox_bootstrap_node_name }}/host.fw"
+  changed_when: true
+
+- name: Remove staging file
+  ansible.builtin.file:
+    path: "/tmp/proxmox_bootstrap_host.fw"
+    state: absent
+  changed_when: false
+
+- name: Validate firewall config syntax (parse only, does not apply)
+  ansible.builtin.command:
+    cmd: "pve-firewall compile"
+  register: proxmox_bootstrap_fw_compile
+  changed_when: false
+  failed_when: proxmox_bootstrap_fw_compile.rc != 0
+
+- name: Restart pve-firewall to apply immediately
+  ansible.builtin.systemd:
+    name: pve-firewall
+    state: restarted
+
+- name: Post-enforcement reminder
+  ansible.builtin.debug:
+    msg: >-
+      policy_in=DROP applied. From a SEPARATE terminal/connection right
+      now, confirm you can still reach SSH and the web UI. If you can't,
+      you still have console/physical access to the laptop as a fallback
+      — see docs/proxmox/installation.md.

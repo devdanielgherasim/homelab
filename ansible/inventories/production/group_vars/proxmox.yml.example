@@ -1,0 +1,41 @@
+# Copy to proxmox.yml (same dir) and fill in real values. Gitignored —
+# never commit the real file. See docs/security/public-repository.md.
+
+# --- network_check tag: read-only verification, never changes anything ---
+# Expected management interface + CIDR, per docs/architecture/networking.md.
+# The playbook fails loudly (does not modify config) if the host's actual
+# interface doesn't match — catching a wrong assumption before any other
+# tag runs.
+proxmox_bootstrap_expected_mgmt_interface: "vmbr0"
+proxmox_bootstrap_expected_mgmt_cidr: "10.10.10.0/24"   # replace with your real management CIDR
+
+# --- firewall tags: firewall-rules (safe, additive) then firewall-enforce
+# (changes default policy to deny — run ONLY after firewall-rules has been
+# applied and you've confirmed you can still reach the host) ---
+# CIDRs allowed to reach SSH (22) and the Proxmox web UI (8006). Keep this
+# as narrow as possible — ideally just your management/VPN subnet, never
+# 0.0.0.0/0.
+proxmox_bootstrap_firewall_allowed_mgmt_cidrs:
+  - "10.10.10.0/24"   # replace with your real management CIDR
+
+# --- api_token tag: safe, additive, no lockout risk ---
+# Dedicated, least-privilege PVE user for OpenTofu — never root, never the
+# user you log in as interactively.
+proxmox_bootstrap_opentofu_pve_user: "opentofu@pve"
+proxmox_bootstrap_opentofu_pve_tokenid: "tofu"
+# PVEVMAdmin (or a custom role you define) scoped to VM lifecycle only —
+# not Administrator/PVEAdmin. Adjust to the least privilege your OpenTofu
+# module actually needs once it exists.
+proxmox_bootstrap_opentofu_pve_role: "PVEVMAdmin"
+
+# --- ssh_key_add tag: safe, additive (adds a key, doesn't remove access) ---
+# Path to the PUBLIC key only, on the machine running Ansible. The
+# matching private key never gets referenced here and never gets committed.
+proxmox_bootstrap_admin_ssh_pubkey_path: "~/.ssh/homelab_admin_ed25519.pub"
+proxmox_bootstrap_admin_ssh_privkey_path: "~/.ssh/homelab_admin_ed25519"
+
+# --- ssh_lockdown tag: DISABLES password auth — run only after verifying
+# key-based login works. See ansible/roles/proxmox_bootstrap/tasks/ssh_hardening.yml
+# for the exact safety sequence. ---
+# no separate var needed; this tag hardens sshd_config using the key
+# added by ssh_key_add.

@@ -1,0 +1,43 @@
+---
+# Bootstraps a freshly-installed Proxmox host to the point where OpenTofu
+# and Ansible can manage it declaratively — implements steps 1-4 of
+# docs/proxmox/installation.md's "What happens immediately after install"
+# section. See that document for the full context and the recovery
+# sequence this fits into.
+#
+# DO NOT run this with `ansible-playbook playbooks/proxmox-bootstrap.yml`
+# and no --tags. Run ONE tag at a time, in this order, verifying between
+# each:
+#
+#   1. --tags network_check   (read-only, safe — verify before anything else)
+#   2. --tags api_token       (additive, safe — no lockout risk)
+#   3. --tags ssh_key_add     (additive, safe — adds a key, removes nothing)
+#      -> STOP. In a SEPARATE terminal, confirm you can log in with the
+#         new key: ssh -i ~/.ssh/homelab_admin_ed25519 root@<mgmt-ip>
+#         Do not proceed until that works.
+#   4. --tags firewall_rules  (additive — writes allow rules, policy stays permissive)
+#      -> STOP. Confirm you can still reach SSH and the web UI.
+#   5. --tags firewall_enforce (changes default policy to deny — the first
+#      genuinely risky step; only after step 4 is confirmed working)
+#   6. --tags ssh_lockdown    (disables password auth — the second
+#      genuinely risky step; only after step 3's key login is confirmed)
+#
+# Example:
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/proxmox-bootstrap.yml --tags network_check
+#
+# Keep console/physical access to the laptop available until steps 5 and
+# 6 are both confirmed working over SSH from a fresh connection — that's
+# your rollback path if something is misconfigured.
+#
+# This playbook changes real infrastructure state. Per AGENTS.md's
+# destructive-action policy, running firewall_enforce or ssh_lockdown is
+# an explicit human decision — this file documents the procedure, it does
+# not grant permission to skip reviewing what each tag does.
+
+- name: Bootstrap Proxmox host for IaC management
+  hosts: proxmox
+  become: true
+  gather_facts: true
+  roles:
+    - proxmox_bootstrap

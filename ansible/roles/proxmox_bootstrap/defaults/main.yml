@@ -1,0 +1,18 @@
+---
+# Defaults — override in inventories/production/group_vars/proxmox.yml
+# (copied from proxmox.yml.example, gitignored, never real values here).
+proxmox_bootstrap_expected_mgmt_interface: "vmbr0"
+proxmox_bootstrap_expected_mgmt_cidr: "CHANGE_ME"
+proxmox_bootstrap_firewall_allowed_mgmt_cidrs: []
+proxmox_bootstrap_opentofu_pve_user: "opentofu@pve"
+proxmox_bootstrap_opentofu_pve_tokenid: "tofu"
+proxmox_bootstrap_opentofu_pve_role: "PVEVMAdmin"
+proxmox_bootstrap_admin_ssh_pubkey_path: "~/.ssh/homelab_admin_ed25519.pub"
+# Explicit, not derived from the pubkey path via regex — a regex_replace
+# on a Jinja expression inside a YAML block scalar is fragile (backslash
+# escaping crosses YAML and Jinja layers) and broke in practice: it left
+# the .pub file being used as the private key in ssh_lockdown, which
+# reads as odd file permissions on the "private key" rather than a
+# clearly wrong path. Two explicit vars, no derivation, no ambiguity.
+proxmox_bootstrap_admin_ssh_privkey_path: "~/.ssh/homelab_admin_ed25519"
+proxmox_bootstrap_node_name: "{{ ansible_facts['hostname'] }}"

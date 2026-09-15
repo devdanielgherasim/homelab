@@ -1,0 +1,51 @@
+---
+# Additive, safe: adds a public key to root's authorized_keys. Does NOT
+# remove password auth or any existing access — that's the separate,
+# explicitly-gated ssh_lockdown stage, run only after you've verified the
+# key added here actually works.
+
+- name: Confirm local public key file exists before doing anything
+  ansible.builtin.stat:
+    path: "{{ proxmox_bootstrap_admin_ssh_pubkey_path }}"
+  delegate_to: localhost
+  become: false
+  register: proxmox_bootstrap_pubkey_file
+
+- name: Fail early with a clear message if the public key file is missing
+  ansible.builtin.assert:
+    that:
+      - proxmox_bootstrap_pubkey_file.stat.exists
+    fail_msg: >-
+      {{ proxmox_bootstrap_admin_ssh_pubkey_path }} not found on the
+      machine running Ansible. Generate one first: ssh-keygen -t ed25519
+      -f ~/.ssh/homelab_admin_ed25519 -C "homelab-admin" — see
+      docs/architecture/networking.md for the Ed25519-only policy.
+
+- name: Ensure /root/.ssh exists with correct permissions
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Add the admin public key to root's authorized_keys
+  # Plain ansible.builtin.lineinfile rather than ansible.posix.authorized_key
+  # — avoids adding a collection dependency (ansible.posix isn't bundled
+  # with ansible-core) for a one-line file edit.
+  ansible.builtin.lineinfile:
+    path: /root/.ssh/authorized_keys
+    create: true
+    owner: root
+    group: root
+    mode: "0600"
+    line: "{{ lookup('file', proxmox_bootstrap_admin_ssh_pubkey_path) }}"
+    state: present
+
+- name: Reminder — verify key-based login before running ssh_lockdown
+  ansible.builtin.debug:
+    msg: >-
+      Key added. In a SEPARATE terminal now, confirm:
+      ssh -i {{ proxmox_bootstrap_admin_ssh_privkey_path }}
+      root@{{ ansible_host | default(inventory_hostname) }}
+      Only run --tags ssh_lockdown after that succeeds.

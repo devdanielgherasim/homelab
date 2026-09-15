@@ -1,0 +1,77 @@
+---
+# RISKY stage — only reachable with explicit --tags ssh_lockdown (see
+# roles/proxmox_bootstrap/tasks/main.yml's 'never' tag). Disables SSH
+# password authentication and direct root login with a password. Run
+# this ONLY after ssh_key_add and after confirming key-based login works.
+#
+# This stage does NOT just trust that confirmation — it independently
+# re-verifies key-based login itself, from the Ansible controller, before
+# touching sshd_config. sshd config is syntax-checked with `sshd -t`
+# before the service is restarted, so a typo can't lock you out via a
+# broken config (it would simply fail this task instead).
+
+- name: Independently verify key-based login works before disabling password auth
+  ansible.builtin.command:
+    cmd: >
+      ssh -o BatchMode=yes -o ConnectTimeout=5
+      -o StrictHostKeyChecking=accept-new
+      -i {{ proxmox_bootstrap_admin_ssh_privkey_path }}
+      root@{{ ansible_host | default(inventory_hostname) }} true
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: proxmox_bootstrap_key_login_check
+
+- name: Abort if key-based login verification failed
+  ansible.builtin.assert:
+    that:
+      - proxmox_bootstrap_key_login_check.rc == 0
+    fail_msg: >-
+      Key-based login failed. Password auth was NOT disabled. Fix key
+      access first (re-run --tags ssh_key_add if needed) before retrying
+      this tag.
+
+- name: Require explicit confirmation before disabling password auth
+  ansible.builtin.pause:
+    prompt: >-
+      Key-based login to {{ inventory_hostname }} just verified working.
+      About to disable SSH password authentication and root password
+      login. Type 'yes' to proceed, anything else aborts.
+  register: proxmox_bootstrap_confirm_lockdown
+
+- name: Abort if not confirmed
+  ansible.builtin.meta: end_play
+  when: proxmox_bootstrap_confirm_lockdown.user_input | lower != 'yes'
+
+- name: Disable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication\s'
+    line: "PasswordAuthentication no"
+    validate: "sshd -t -f %s"
+
+- name: Restrict root login to key-based only (no password)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PermitRootLogin\s'
+    line: "PermitRootLogin prohibit-password"
+    validate: "sshd -t -f %s"
+
+- name: Validate final sshd config before restart
+  ansible.builtin.command:
+    cmd: "sshd -t"
+  changed_when: false
+
+- name: Restart sshd to apply
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted
+
+- name: Post-lockdown reminder
+  ansible.builtin.debug:
+    msg: >-
+      Password auth disabled. From a SEPARATE terminal/connection right
+      now, confirm key-based login still works:
+      ssh -i {{ proxmox_bootstrap_admin_ssh_privkey_path }}
+      root@{{ ansible_host | default(inventory_hostname) }}
+      Console/physical access remains your fallback if something's wrong.

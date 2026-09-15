@@ -1,0 +1,8 @@
+# Copy this file to hosts.yml in the same directory and fill in real
+# values. hosts.yml is gitignored — never commit it. See
+# docs/security/public-repository.md.
+proxmox:
+  hosts:
+    pve01:
+      ansible_host: YOUR_PROXMOX_MGMT_IP_HERE   # e.g. 10.10.10.10 — see docs/architecture/networking.md
+      ansible_user: root                         # bootstrap only — see group_vars/proxmox.yml.example

@@ -1,0 +1,32 @@
+---
+# Each stage is a separate file, included with its own tag. Run one tag
+# at a time — see playbooks/proxmox-bootstrap.yml's header for the order
+# and the verification step required between stages.
+
+- name: Stage 1 — verify management network (read-only)
+  ansible.builtin.import_tasks: network_check.yml
+  tags: [network_check]
+
+- name: Stage 2 — create least-privilege OpenTofu API token (additive)
+  ansible.builtin.import_tasks: api_token.yml
+  tags: [api_token]
+
+- name: Stage 3 — add admin SSH public key (additive)
+  ansible.builtin.import_tasks: ssh_key_add.yml
+  tags: [ssh_key_add]
+
+- name: Stage 4 — write firewall allow rules, policy stays permissive (additive)
+  ansible.builtin.import_tasks: firewall_rules.yml
+  tags: [firewall_rules]
+
+# 'never' = requires explicit --tags firewall_enforce, excluded from any
+# broader tag run — RISKY, run only after Stage 4 is confirmed working.
+- name: Stage 5 — enforce default-deny firewall policy
+  ansible.builtin.import_tasks: firewall_enforce.yml
+  tags: [firewall_enforce, never]
+
+# 'never' = requires explicit --tags ssh_lockdown, excluded from any
+# broader tag run — RISKY, run only after Stage 3's key login is confirmed.
+- name: Stage 6 — disable SSH password auth
+  ansible.builtin.import_tasks: ssh_lockdown.yml
+  tags: [ssh_lockdown, never]

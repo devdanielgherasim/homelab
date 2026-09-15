@@ -97,6 +97,17 @@ Once steps 1–4 are done, the host is a target for `tofu`/`ansible`, not a
 UI to click through. **None of steps 1–4 have been performed yet as of
 this document's last update** — see [`STATUS.md`](../../STATUS.md).
 
+Steps 1–4 are implemented by the `proxmox_bootstrap` Ansible role
+(`ansible/roles/proxmox_bootstrap/`, driven by
+`ansible/playbooks/proxmox-bootstrap.yml`) rather than done by hand —
+**read that playbook's header before running it.** It's staged across 6
+tags run one at a time with verification between them, because steps 2
+and 4 (firewall, SSH) carry real lockout risk on a single physical host
+with no other admin path. See [`../../ansible/README.md`](../../ansible/README.md)
+for the tag order and safety design. The role is written and statically
+validated (`ansible-lint` production profile, `--syntax-check`) but has
+not been run against the real host.
+
 ## Reproducibility / disaster-recovery objective
 
 ```

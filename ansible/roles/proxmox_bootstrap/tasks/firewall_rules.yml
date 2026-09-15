@@ -1,0 +1,59 @@
+---
+# Additive: enables the Proxmox firewall with explicit allow rules for
+# SSH/web UI from your management CIDR, but policy_in stays ACCEPT — so
+# nothing that currently reaches this host stops reaching it. Confirm
+# connectivity before running firewall_enforce.
+#
+# Also relies on Proxmox's own built-in anti-lockout rule (documented at
+# https://pve.proxmox.com/wiki/Firewall), which keeps management access
+# reachable even under a DROP policy — this stage's explicit rules are
+# defense in depth on top of that, not the sole safety net.
+
+- name: Require at least one allowed management CIDR before enabling anything
+  ansible.builtin.assert:
+    that:
+      - proxmox_bootstrap_firewall_allowed_mgmt_cidrs | length > 0
+    fail_msg: >-
+      proxmox_bootstrap_firewall_allowed_mgmt_cidrs is empty in
+      group_vars/proxmox.yml — set it to your real management CIDR before
+      running this tag, or you may have no explicit allow rule for your
+      own access.
+
+- name: Render host.fw (permissive policy_in=ACCEPT) to a staging path
+  # /etc/pve is pmxcfs (a FUSE filesystem), not a normal POSIX filesystem
+  # — it rejects the rename()+chmod() that ansible.builtin.template uses
+  # internally ("Operation not permitted"). Render to /tmp first (a
+  # normal filesystem), then copy into place with a plain `cp` in the
+  # next task, which does a direct write pmxcfs accepts.
+  ansible.builtin.template:
+    src: host.fw.j2
+    dest: "/tmp/proxmox_bootstrap_host.fw"
+    mode: "0600"
+  vars:
+    pve_firewall_policy_in: "ACCEPT"
+  changed_when: false
+
+- name: Copy staged host.fw into place on pmxcfs
+  ansible.builtin.command:
+    cmd: "cp /tmp/proxmox_bootstrap_host.fw /etc/pve/nodes/{{ proxmox_bootstrap_node_name }}/host.fw"
+  changed_when: true
+
+- name: Remove staging file
+  ansible.builtin.file:
+    path: "/tmp/proxmox_bootstrap_host.fw"
+    state: absent
+  changed_when: false
+
+- name: Validate firewall config syntax (parse only, does not apply)
+  ansible.builtin.command:
+    cmd: "pve-firewall compile"
+  register: proxmox_bootstrap_fw_compile
+  changed_when: false
+  failed_when: proxmox_bootstrap_fw_compile.rc != 0
+
+- name: Reminder before enforcing
+  ansible.builtin.debug:
+    msg: >-
+      host.fw written with policy_in=ACCEPT (permissive) — nothing is
+      blocked yet. Confirm SSH and the web UI still work normally, then
+      run --tags firewall_enforce to switch to deny-by-default.

@@ -1,0 +1,26 @@
+---
+# Read-only. Never modifies anything. Fails loudly if the expected
+# management interface is missing so a wrong assumption is caught before
+# any other stage runs — deliberately does not attempt automatic CIDR
+# membership math (avoids an extra collection dependency and a silent
+# false-positive); you compare the printed values yourself.
+
+- name: Assert expected management interface exists
+  ansible.builtin.assert:
+    that:
+      - proxmox_bootstrap_expected_mgmt_interface in ansible_facts.interfaces
+    fail_msg: >-
+      Interface '{{ proxmox_bootstrap_expected_mgmt_interface }}' not
+      found on this host. Actual interfaces:
+      {{ ansible_facts.interfaces | join(', ') }}. Stop here — do not
+      proceed to other tags until this is understood.
+    success_msg: "Interface '{{ proxmox_bootstrap_expected_mgmt_interface }}' present."
+
+- name: Show actual vs. expected management network — confirm by eye
+  ansible.builtin.debug:
+    msg:
+      - "Expected management CIDR (from group_vars): {{ proxmox_bootstrap_expected_mgmt_cidr }}"
+      - >-
+        Actual address on {{ proxmox_bootstrap_expected_mgmt_interface }}:
+        {{ ansible_facts[proxmox_bootstrap_expected_mgmt_interface]['ipv4'] | default('no IPv4 address found') }}
+      - "Confirm these are consistent before running any other tag."
