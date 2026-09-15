@@ -1,0 +1,38 @@
+---
+# Defense in depth, not removal of a working access path: cloud-init
+# never set a password for the `ubuntu` user in the first place (only
+# the admin SSH key), so there's no functioning password-based login
+# being closed off here — unlike proxmox_bootstrap's ssh_lockdown, which
+# is why this doesn't need that stage's interactive-confirmation/
+# independent-reverification treatment. Still validated with `sshd -t`
+# before restart, so a config typo fails this task instead of breaking SSH.
+
+- name: Disable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication\s'
+    line: "PasswordAuthentication no"
+    validate: "sshd -t -f %s"
+  become: true
+
+- name: Disable root SSH login entirely
+  # No key is provisioned for root on these guests (only `ubuntu`) — this
+  # makes that explicit in config rather than relying on "no key exists".
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PermitRootLogin\s'
+    line: "PermitRootLogin no"
+    validate: "sshd -t -f %s"
+  become: true
+
+- name: Validate final sshd config before restart
+  ansible.builtin.command:
+    cmd: "sshd -t"
+  become: true
+  changed_when: false
+
+- name: Restart sshd to apply
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted
+  become: true

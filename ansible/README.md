@@ -24,10 +24,13 @@ ansible/
 │       ├── hosts.example.yml            # copy to hosts.yml (gitignored), fill in real values
 │       └── group_vars/proxmox.yml.example  # copy to proxmox.yml (gitignored)
 ├── playbooks/
-│   └── proxmox-bootstrap.yml   # implements installation.md steps 1-4 — see its header before running
+│   ├── proxmox-bootstrap.yml   # implements installation.md steps 1-4 — see its header before running
+│   ├── proxmox-template.yml    # builds the cloud-init VM template
+│   └── guest-hardening.yml     # SSH hardening + unattended upgrades on the 4 VMs
 └── roles/
     ├── proxmox_bootstrap/      # network check, API token, SSH key, firewall — staged, see below
-    └── proxmox_template/       # builds the Ubuntu 24.04 cloud-init VM template tofu/ clones from
+    ├── proxmox_template/       # builds the Ubuntu 24.04 cloud-init VM template tofu/ clones from
+    └── guest_hardening/        # SSH defense-in-depth + unattended-upgrades on vpn01/cp01/worker01/worker02
 ```
 
 ## Running from WSL2 against a Windows-mounted repo (`/mnt/e/...`)
@@ -86,6 +89,19 @@ doesn't touch firewall/SSH/existing VMs, so it isn't staged behind
 confirmation prompts — run it with `ansible-playbook
 playbooks/proxmox-template.yml`.
 
+## The `guest_hardening` role
+
+SSH defense in depth (`PasswordAuthentication no`, `PermitRootLogin no` —
+cloud-init never set a password for `ubuntu` in the first place, so this
+closes a door that likely doesn't open anyway, unlike `proxmox_bootstrap`'s
+`ssh_lockdown` which removed a *working* path) plus unattended security
+upgrades with automatic reboot **off** by default
+(`guest_hardening_unattended_reboot`, a real toggle if ever wanted).
+Deliberately out of scope: guest-level firewall (`ufw`) — the Proxmox
+host firewall and, later, Cilium NetworkPolicies are the intended layers,
+not a third one; swap-disable (a kubeadm prerequisite, not hardening —
+next role); `fail2ban` (no clear benefit on LAN-only, key-only SSH).
+
 ## Rules
 
 - Real inventory files, vault passwords, and any host-specific variables
@@ -106,7 +122,9 @@ playbooks/proxmox-template.yml`.
 
 `proxmox_bootstrap` and `proxmox_template`: both deployed and verified
 against `pve01`. The `api_token` stage needed a follow-up fix
-(3 Proxmox RBAC namespaces, not just `PVEVMAdmin`) found via real `tofu
-apply` 403s — see the header comment in
-`roles/proxmox_bootstrap/tasks/api_token.yml`. See
+(3 Proxmox RBAC namespaces, not just `PVEVMAdmin`) found via real
+OpenTofu apply 403s — see the header comment in
+`roles/proxmox_bootstrap/tasks/api_token.yml`. `guest_hardening`:
+generated, statically validated (`ansible-lint` production profile,
+`--syntax-check` both pass), **not yet run**. See
 [`../STATUS.md`](../STATUS.md).

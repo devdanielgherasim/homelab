@@ -6,3 +6,19 @@ proxmox:
     pve01:
       ansible_host: YOUR_PROXMOX_MGMT_IP_HERE   # e.g. 10.10.10.10 — see docs/architecture/networking.md
       ansible_user: root                         # bootstrap only — see group_vars/proxmox.yml.example
+
+# The 4 VMs created by tofu/environments/homelab/ — cloud-init sets up
+# the `ubuntu` user with your admin key (no password), matching the IPs
+# in terraform.tfvars. Update these to match your real terraform.tfvars.
+homelab_vms:
+  hosts:
+    vpn01:
+      ansible_host: YOUR_VPN01_IP_HERE      # e.g. 10.10.10.11
+    cp01:
+      ansible_host: YOUR_CP01_IP_HERE       # e.g. 10.10.10.12
+    worker01:
+      ansible_host: YOUR_WORKER01_IP_HERE   # e.g. 10.10.10.13
+    worker02:
+      ansible_host: YOUR_WORKER02_IP_HERE   # e.g. 10.10.10.14
+  vars:
+    ansible_user: ubuntu

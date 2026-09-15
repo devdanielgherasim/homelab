@@ -1,0 +1,6 @@
+---
+# No unattended automatic reboot by default — a silent reboot on a
+# homelab node you might be mid-task on is its own kind of surprise.
+# Reboot cadence stays a human decision; this only enables automatic
+# *installation* of security updates.
+guest_hardening_unattended_reboot: false

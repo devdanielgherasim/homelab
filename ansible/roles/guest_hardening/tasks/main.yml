@@ -1,0 +1,8 @@
+---
+- name: SSH hardening
+  ansible.builtin.import_tasks: ssh_hardening.yml
+  tags: [ssh_hardening]
+
+- name: Unattended security upgrades
+  ansible.builtin.import_tasks: unattended_upgrades.yml
+  tags: [unattended_upgrades]
