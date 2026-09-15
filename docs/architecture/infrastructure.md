@@ -6,14 +6,18 @@ Status: design reference — see [`STATUS.md`](../../STATUS.md).
 
 16 GB RAM is the hard ceiling. Allocations are deliberately conservative.
 
-| VM / host | vCPU | RAM | Role |
-|---|---|---|---|
-| Proxmox host | host | ~2 GB reserved | Hypervisor and management |
-| `vpn01` | 1 | 512 MB – 1 GB | VPN gateway / bastion / subnet router |
-| `cp01` | 2 | 2.5–3 GB | Kubernetes control plane + etcd |
-| `worker01` | 2 | 3–3.5 GB | Application/platform workloads |
-| `worker02` | 2 | 3–3.5 GB | Application/platform workloads |
-| Headroom | — | ~3–4 GB | Filesystem cache, bursts, temporary workloads |
+| VM / host | vCPU | RAM | Disk | Role |
+|---|---|---|---|---|
+| Proxmox host | host | ~2 GB reserved | — | Hypervisor and management |
+| `vpn01` | 1 | 512 MB – 1 GB | 16 GB | VPN gateway / bastion / subnet router |
+| `cp01` | 2 | 2.5–3 GB | 32 GB | Kubernetes control plane + etcd |
+| `worker01` | 2 | 3–3.5 GB | 64 GB | Application/platform workloads |
+| `worker02` | 2 | 3–3.5 GB | 64 GB | Application/platform workloads |
+| Headroom | — | ~3–4 GB | ~320 GB | Filesystem cache, bursts, temporary workloads, VM template, backups |
+
+Disk figures assume the 500 GB SSD; generous relative to RAM since disk
+is the less contended resource here. Sized as the OpenTofu module's
+defaults (`tofu/modules/proxmox-vm/`) — adjust both together if changed.
 
 Observability retention must stay short (see
 [`observability.md`](observability.md)) to avoid memory and disk pressure.

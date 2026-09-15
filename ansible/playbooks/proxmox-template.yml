@@ -1,0 +1,19 @@
+---
+# Builds the Ubuntu 24.04 cloud-init VM template that
+# tofu/modules/proxmox-vm/ clones from. Run once, after
+# playbooks/proxmox-bootstrap.yml (needs the admin SSH key from that
+# playbook's ssh_key_add stage). Idempotent — safe to re-run, skips
+# entirely if the template already exists. Unlike proxmox-bootstrap.yml,
+# this doesn't touch firewall/SSH/existing VMs, so it isn't staged behind
+# confirmation prompts.
+#
+# Example:
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/proxmox-template.yml --private-key ~/.ssh/homelab_admin_ed25519
+
+- name: Build Ubuntu 24.04 cloud-init template
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  roles:
+    - proxmox_template

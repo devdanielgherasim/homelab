@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-15 (proxmox_bootstrap role deployed and verified).
+Last updated: 2026-09-15 (VM template role + OpenTofu module added).
 
 State legend: **PLANNED** (designed, not built) · **IMPLEMENTED** (code/config
 exists, statically validated) · **VALIDATED** (tested against a real or
@@ -19,10 +19,11 @@ and AI-agent configuration. **No infrastructure has been provisioned yet.**
 | Architecture design | PLANNED | `docs/architecture/`, ported from prior design doc. |
 | Proxmox host | DEPLOYED | Physically installed (Proxmox VE 9.2), now under Ansible-managed configuration (see below) — VM provisioning still manual/pending. |
 | Proxmox bootstrap (network check, API token, SSH key, firewall) | DEPLOYED | `ansible/roles/proxmox_bootstrap/`, all 6 stages run against `pve01` by the user and verified: dedicated OpenTofu API token created, admin SSH key added, firewall rules applied, SSH password auth disabled — confirmed by a direct key-only SSH test after lockdown. One real bug found and fixed mid-rollout: `template` can't write directly to `/etc/pve` (pmxcfs, non-POSIX — worked around with stage-to-`/tmp`-then-`cp`); a fragile `regex_replace`-derived private-key path silently pointed at the `.pub` file instead (replaced with an explicit variable). See `plans/2026-09-15-proxmox-bootstrap-role.md`. |
-| `vpn01` (Tailscale gateway) | PLANNED | — |
-| `cp01` / `worker01` / `worker02` | PLANNED | — |
-| OpenTofu Proxmox provisioning | PLANNED | `tofu/` scaffolding only. |
-| Ansible node configuration | PLANNED | `ansible/` has the `proxmox_bootstrap` role (see above); kubeadm/guest-hardening roles not started. |
+| Proxmox VM template (Ubuntu 24.04 cloud-init, VMID 9000) | IMPLEMENTED | `ansible/roles/proxmox_template/` — generated, `ansible-lint` (production profile) and `--syntax-check` pass. Not yet run. |
+| `vpn01` (Tailscale gateway) | PLANNED | OpenTofu module ready (see below); not applied. |
+| `cp01` / `worker01` / `worker02` | PLANNED | OpenTofu module ready (see below); not applied. |
+| OpenTofu Proxmox provisioning | IMPLEMENTED | `tofu/modules/proxmox-vm/` + `tofu/environments/homelab/` (provider `bpg/proxmox` v0.113.1) — `tofu fmt -check` and `tofu validate` both pass (verified live in WSL2). **Not applied** — no VM has been created yet. Known caveat: provider has open issues around disk-resize-on-clone, documented in the module's README. |
+| Ansible node configuration | PLANNED | `ansible/` has `proxmox_bootstrap` (deployed) and `proxmox_template` (see above); kubeadm/guest-hardening roles not started. |
 | Kubernetes bootstrap (kubeadm) | PLANNED | — |
 | Cilium / Hubble | PLANNED | — |
 | MetalLB | PLANNED | — |
@@ -51,12 +52,14 @@ Phase 1 — Foundation, remaining:
 
 1. ~~Run `ansible/roles/proxmox_bootstrap/` against the real Proxmox
    host~~ — done 2026-09-15, verified (key-only SSH confirmed working).
-2. **OpenTofu module** to provision the Proxmox VMs (`vpn01`, `cp01`,
-   `worker01`, `worker02`) from the Ubuntu 24.04 template, using the
-   OpenTofu API token created in step 1 (make sure it's stored somewhere
-   durable — GitHub Actions Secrets or a local secrets manager — it was
-   only ever shown once).
-3. Ansible guest-hardening + containerd/kubeadm-prerequisite roles for
-   those VMs.
+2. **Human action**: run `ansible/roles/proxmox_template/`
+   (`playbooks/proxmox-template.yml`) to build the Ubuntu 24.04 template —
+   not yet run.
+3. **Human action**: `cp terraform.tfvars.example terraform.tfvars` in
+   `tofu/environments/homelab/`, fill in real values, export
+   `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`, then `tofu plan` and
+   review before `tofu apply` — see `tofu/README.md`. Depends on step 2.
+4. Ansible guest-hardening + containerd/kubeadm-prerequisite roles for
+   the VMs once they exist.
 
 Tracked in `plans/`.

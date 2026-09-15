@@ -1,0 +1,78 @@
+---
+# Idempotent: if VMID proxmox_template_vmid already exists (as a VM or a
+# template), every remaining task in this file is skipped — safe to
+# re-run. Not staged/tagged like proxmox_bootstrap's risky stages: this
+# only ever creates a new template, it doesn't touch existing VMs,
+# network, firewall, or SSH access, so there's no lockout-class risk here.
+
+- name: Check whether the template VMID already exists
+  ansible.builtin.command:
+    cmd: "qm status {{ proxmox_template_vmid }}"
+  register: proxmox_template_existing
+  changed_when: false
+  failed_when: false
+
+- name: Build the Ubuntu 24.04 cloud-init template
+  when: proxmox_template_existing.rc != 0
+  block:
+    - name: Download Ubuntu 24.04 cloud image (checksum-verified)
+      ansible.builtin.get_url:
+        url: "{{ proxmox_template_image_url }}"
+        dest: "{{ proxmox_template_download_dest }}"
+        checksum: "sha256:{{ proxmox_template_checksum_url }}"
+        mode: "0644"
+
+    - name: Create the base VM shell
+      ansible.builtin.command:
+        cmd: >
+          qm create {{ proxmox_template_vmid }}
+          --name {{ proxmox_template_name }}
+          --memory {{ proxmox_template_memory }}
+          --cores {{ proxmox_template_cores }}
+          --cpu host
+          --ostype l26
+          --net0 virtio,bridge={{ proxmox_template_bridge }}
+          --scsihw virtio-scsi-pci
+      changed_when: true
+
+    - name: Import the cloud image and attach it as scsi0
+      ansible.builtin.command:
+        cmd: >
+          qm set {{ proxmox_template_vmid }}
+          --scsi0 {{ proxmox_template_storage }}:0,import-from={{ proxmox_template_download_dest }}
+      changed_when: true
+
+    - name: Attach a Cloud-Init drive
+      ansible.builtin.command:
+        cmd: "qm set {{ proxmox_template_vmid }} --ide2 {{ proxmox_template_storage }}:cloudinit"
+      changed_when: true
+
+    - name: Set boot order and console (serial — cloud images have no real display)
+      ansible.builtin.command:
+        cmd: >
+          qm set {{ proxmox_template_vmid }}
+          --boot order=scsi0
+          --serial0 socket --vga serial0
+      changed_when: true
+
+    - name: Enable the QEMU guest agent
+      # Ubuntu's official cloud images ship qemu-guest-agent
+      # preinstalled and enabled; this just tells Proxmox to expect it
+      # so `qm agent`/OpenTofu IP-detection works once VMs are cloned.
+      ansible.builtin.command:
+        cmd: "qm set {{ proxmox_template_vmid }} --agent enabled=1"
+      changed_when: true
+
+    - name: Convert to a template
+      # Final step — after this, qm status will report it as existing on
+      # any re-run, so the whole block above is skipped.
+      ansible.builtin.command:
+        cmd: "qm template {{ proxmox_template_vmid }}"
+      changed_when: true
+
+- name: Report status
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Template ' + proxmox_template_vmid | string + ' already existed — nothing done.'
+         if proxmox_template_existing.rc == 0
+         else 'Template ' + proxmox_template_vmid | string + ' (' + proxmox_template_name + ') created.' }}

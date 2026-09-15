@@ -10,12 +10,15 @@ Thumbs.db
 *.tfstate
 *.tfstate.*
 .terraform/
-.terraform.lock.hcl
 *.tfplan
 *.tfvars
 !*.tfvars.example
 crash.log
 crash.*.log
+# .terraform.lock.hcl is intentionally NOT ignored — OpenTofu recommends
+# committing it (pins exact provider versions/hashes, like a package
+# lockfile). Caught before it caused a real problem: verify with
+# `git status` after the first `tofu init` in any new module.
 
 # --- Ansible ---
 # NOTE: patterns below use a leading **/ so they match at any nesting

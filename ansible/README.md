@@ -26,7 +26,8 @@ ansible/
 ├── playbooks/
 │   └── proxmox-bootstrap.yml   # implements installation.md steps 1-4 — see its header before running
 └── roles/
-    └── proxmox_bootstrap/      # network check, API token, SSH key, firewall — staged, see below
+    ├── proxmox_bootstrap/      # network check, API token, SSH key, firewall — staged, see below
+    └── proxmox_template/       # builds the Ubuntu 24.04 cloud-init VM template tofu/ clones from
 ```
 
 ## Running from WSL2 against a Windows-mounted repo (`/mnt/e/...`)
@@ -75,6 +76,16 @@ and the `pveum` CLI on the host instead of `community.general`'s Proxmox
 modules (which need `proxmoxer`/`requests` on the controller), to keep
 this bootstrap step dependency-free.
 
+## The `proxmox_template` role
+
+Downloads the Ubuntu 24.04 cloud image (checksum-verified against
+Canonical's published `SHA256SUMS`) and builds a cloud-init-ready VM
+template (VMID 9000 by default) via the `qm` CLI. Idempotent — skips
+entirely if the template already exists. Unlike `proxmox_bootstrap`, this
+doesn't touch firewall/SSH/existing VMs, so it isn't staged behind
+confirmation prompts — run it with `ansible-playbook
+playbooks/proxmox-template.yml`.
+
 ## Rules
 
 - Real inventory files, vault passwords, and any host-specific variables
@@ -93,7 +104,7 @@ this bootstrap step dependency-free.
 
 ## Status
 
-`proxmox_bootstrap` role: generated, statically validated
-(`ansible-lint` production profile passes, `--syntax-check` passes). **Not
-yet run against real infrastructure** — see
-[`../STATUS.md`](../STATUS.md). No other playbooks exist yet.
+`proxmox_bootstrap`: deployed and verified against `pve01`. `proxmox_template`:
+generated, statically validated (`ansible-lint` production profile
+passes, `--syntax-check` passes), **not yet run**. See
+[`../STATUS.md`](../STATUS.md).

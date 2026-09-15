@@ -1,0 +1,18 @@
+---
+# Defaults — override in inventories/production/group_vars/proxmox.yml
+# if needed; sensible for a fresh single-node Proxmox install otherwise.
+proxmox_template_vmid: 9000
+proxmox_template_name: "ubuntu-24.04-cloud-init-template"
+# Stable URLs — Canonical keeps these pointed at the current 24.04 point
+# release; doesn't need version-pinning the way software releases do.
+proxmox_template_image_url: >-
+  https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-amd64.img
+proxmox_template_checksum_url: >-
+  https://cloud-images.ubuntu.com/releases/noble/release/SHA256SUMS
+proxmox_template_download_dest: "/var/lib/vz/template/iso/ubuntu-24.04-server-cloudimg-amd64.img"
+# Default Proxmox install storage IDs — override if yours differ
+# (check with `pvesm status` on the host).
+proxmox_template_storage: "local-lvm"
+proxmox_template_bridge: "vmbr0"
+proxmox_template_memory: 2048
+proxmox_template_cores: 2

@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars (gitignored — never commit the real file) and
+# fill in your real values. See docs/security/public-repository.md.
+#
+# Credentials (PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN) are NOT set
+# here — they're environment variables. See tofu/README.md.
+
+proxmox_node_name = "pve01"
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAA...YOUR_PUBLIC_KEY_HERE... homelab-admin",
+]
+
+# Example values matching docs/architecture/networking.md's planning
+# range — replace with your real network. See variables.tf's scope note:
+# all 4 VMs share one flat network for now (no VLAN segmentation yet).
+network_gateway = "10.10.10.1"
+vpn01_ip        = "10.10.10.11/24"
+cp01_ip         = "10.10.10.12/24"
+worker01_ip     = "10.10.10.13/24"
+worker02_ip     = "10.10.10.14/24"
