@@ -8,9 +8,9 @@
     name: docker
     types: deb
     uris: https://download.docker.com/linux/ubuntu
-    suites: "{{ ansible_distribution_release }}"
+    suites: "{{ ansible_facts.distribution_release }}"
     components: stable
-    architectures: "{{ ansible_architecture | replace('x86_64', 'amd64') }}"
+    architectures: "{{ ansible_facts.architecture | replace('x86_64', 'amd64') }}"
     signed_by: https://download.docker.com/linux/ubuntu/gpg
   become: true
 
@@ -37,6 +37,22 @@
     regexp: '^(\s*)SystemdCgroup\s*='
     line: '\1SystemdCgroup = true'
     backrefs: true
+  become: true
+  notify: Restart containerd
+
+- name: Ensure the CRI plugin is not disabled
+  # The containerd.io apt package ships a default config.toml with
+  # `disabled_plugins = ["cri"]` — confirmed live 2026-09-16 against all
+  # 3 nodes, not assumed. That's why the "Generate default containerd
+  # config (only if missing)" task above is a no-op here: the package
+  # already dropped a config.toml, so containerd's own real defaults
+  # never got generated. With CRI disabled, kubeadm init fails with
+  # "unknown service runtime.v1.RuntimeService" — this line removes the
+  # disable so the CRI gRPC service actually starts.
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^disabled_plugins\s*='
+    state: absent
   become: true
   notify: Restart containerd
 

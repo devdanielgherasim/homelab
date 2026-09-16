@@ -62,5 +62,22 @@ cross-role default dependency) between `kubeadm_prereqs` and
 - [x] `--syntax-check` — pass
 - [x] `gitleaks` — clean
 - [x] Docs: `ansible/README.md`, `STATUS.md` updated
-- [ ] User runs it; expect `NotReady` nodes until Cilium is installed
-      (separate, later piece — not a failure of this role)
+- [x] User ran it against the real hosts (2026-09-16). `kubeadm_prereqs`
+      succeeded cleanly on all 3 nodes. `kubeadm_init` failed on `cp01`:
+      `[ERROR CRI]: ... unknown service runtime.v1.RuntimeService`.
+      Root-caused via direct SSH, not guessed: the `containerd.io` apt
+      package ships a default `/etc/containerd/config.toml` with
+      `disabled_plugins = ["cri"]` already present — confirmed identical
+      on all 3 nodes. This silently made the "generate default config
+      (only if missing)" task a no-op everywhere (the package had already
+      dropped a file), so containerd's real defaults never got a chance
+      to apply. Fixed: a new idempotent task removes the
+      `disabled_plugins = ` line entirely (`lineinfile: state: absent`),
+      notifying the same `Restart containerd` handler. Also fixed, same
+      pass: two bare (deprecated, unprefixed) fact-variable usages
+      (`ansible_swaptotal_mb`, `ansible_architecture`,
+      `ansible_distribution_release`) flagged by a live `[DEPRECATION
+      WARNING]` during the run — switched to `ansible_facts.*` form,
+      matching the pattern already used correctly elsewhere in this repo.
+      `ansible-lint` production profile re-verified clean after the fix.
+      Re-run pending — see STATUS.md.
