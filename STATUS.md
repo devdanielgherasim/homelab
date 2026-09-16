@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-16 (kubeadm bootstrap role generated, not yet run).
+Last updated: 2026-09-16 (Kubernetes cluster bootstrapped, deployed and verified).
 
 State legend: **PLANNED** (designed, not built) · **IMPLEMENTED** (code/config
 exists, statically validated) · **VALIDATED** (tested against a real or
@@ -8,9 +8,11 @@ representative environment) · **DEPLOYED** (running in the actual homelab).
 
 ## Current focus
 
-Phase 1 (Foundation) is done: Proxmox host bootstrapped, Ubuntu 24.04
-template built, all 4 VMs (`vpn01`, `cp01`, `worker01`, `worker02`)
-created, hardened, and verified. Moving into Kubernetes bootstrap.
+Phase 1 (Foundation) and Phase 2 (Kubernetes bootstrap) are done: Proxmox
+host bootstrapped, Ubuntu 24.04 template built, all 4 VMs (`vpn01`,
+`cp01`, `worker01`, `worker02`) created and hardened, and a real 3-node
+Kubernetes cluster (`cp01` + 2 workers) initialized and verified. Moving
+into cluster networking (Cilium).
 
 ## Component status
 
@@ -22,12 +24,12 @@ created, hardened, and verified. Moving into Kubernetes bootstrap.
 | Proxmox bootstrap (network check, API token, SSH key, firewall) | DEPLOYED | `ansible/roles/proxmox_bootstrap/`, all 6 stages run against `pve01` by the user and verified: dedicated OpenTofu API token created, admin SSH key added, firewall rules applied, SSH password auth disabled — confirmed by a direct key-only SSH test after lockdown. One real bug found and fixed mid-rollout: `template` can't write directly to `/etc/pve` (pmxcfs, non-POSIX — worked around with stage-to-`/tmp`-then-`cp`); a fragile `regex_replace`-derived private-key path silently pointed at the `.pub` file instead (replaced with an explicit variable). See `plans/2026-09-15-proxmox-bootstrap-role.md`. |
 | Proxmox VM template (Ubuntu 24.04 cloud-init, VMID 9000) | DEPLOYED | `ansible/roles/proxmox_template/` run against `pve01`; `qm config 9000` confirmed complete (`template: 1`, disk + cloud-init drive attached, agent enabled). |
 | `vpn01` (Tailscale gateway) | DEPLOYED | VMID 101, `192.168.1.50`. Cloud-init `status: done`, hardened (see below), SSH verified with the admin key. Tailscale itself not yet configured — VM exists, gateway role not yet set up. |
-| `cp01` | DEPLOYED | VMID 102, `192.168.1.51`. Cloud-init `status: done`, hardened. Kubernetes not yet installed on it (role ready — see below). |
-| `worker01` / `worker02` | DEPLOYED | VMIDs 103/104, `192.168.1.52`/`.53`. Cloud-init `status: done` on both, hardened. Kubernetes not yet installed (role ready). |
+| `cp01` | DEPLOYED | VMID 102, `192.168.1.51`. Cloud-init `status: done`, hardened, Kubernetes control plane initialized (see below). |
+| `worker01` / `worker02` | DEPLOYED | VMIDs 103/104, `192.168.1.52`/`.53`. Cloud-init `status: done` on both, hardened, joined to the cluster (see below). |
 | Guest OS hardening (SSH defense-in-depth, unattended-upgrades) | DEPLOYED | `ansible/roles/guest_hardening/` run against all 4 VMs — `0 failed`, `4 changed` each. Spot-verified on `vpn01`: `PasswordAuthentication no` active, sshd restarted and reachable, `unattended-upgrades` installed. No automatic reboot (deliberate default). |
 | OpenTofu Proxmox provisioning | DEPLOYED | `tofu apply` run against `pve01` — `Apply complete! Resources: 4 added, 0 changed, 0 destroyed.` All 4 VMs verified reachable (ping + SSH + `cloud-init status`). Non-fatal QEMU-agent IP-report timeout warning during apply, confirmed cosmetic (SSH access unaffected). Three real Proxmox RBAC gaps found and fixed during rollout — `PVEVMAdmin` alone isn't enough for a clone: also needed `PVEDatastoreUser` on `/storage/local-lvm` (`Datastore.AllocateSpace`) and `PVESDNUser` on `/sdn/zones/localnetwork` (`SDN.Use`, a PVE 9-specific check), each granted to both the user and the token (API tokens with `--privsep 1` need ACLs on the token principal, not just the user — the two are intersected, not unioned). See `ansible/roles/proxmox_bootstrap/tasks/api_token.yml` and `plans/2026-09-15-vm-provisioning.md`. |
-| Ansible node configuration | IMPLEMENTED | `ansible/` has `proxmox_bootstrap`, `proxmox_template`, `guest_hardening` (all deployed) plus `kubeadm_prereqs`/`kubeadm_init`/`kubeadm_join` (generated, validated, not yet run). |
-| Kubernetes bootstrap (kubeadm) | IMPLEMENTED | `ansible/roles/kubeadm_prereqs`\`kubeadm_init`\`kubeadm_join` + `playbooks/k8s-bootstrap.yml` — containerd (Docker apt repo, systemd cgroup), kubeadm/kubelet/kubectl v1.37 from `pkgs.k8s.io`, versions held via `dpkg_selections`. `ansible-lint` (production profile) and `--syntax-check` pass. **Not yet applied.** Nodes will show `NotReady` until Cilium is installed — expected. See `plans/2026-09-16-kubeadm-bootstrap.md`. |
+| Ansible node configuration | DEPLOYED | `ansible/` has `proxmox_bootstrap`, `proxmox_template`, `guest_hardening`, `kubeadm_prereqs`/`kubeadm_init`/`kubeadm_join` — all deployed and verified. |
+| Kubernetes bootstrap (kubeadm) | DEPLOYED | `playbooks/k8s-bootstrap.yml` run against the real hosts (2026-09-16) — 0 failed on all 3 nodes across both runs. `kubectl get nodes` confirmed: `cp01` (control-plane), `worker01`, `worker02`, all `v1.37.0`, `containerd://2.3.5`. All `NotReady` — expected, no CNI yet (next milestone). One real bug found and fixed mid-rollout: the `containerd.io` apt package ships `disabled_plugins = ["cri"]` in its default config, which silently no-op'd the role's "generate default config if missing" step (the package had already dropped a file) and made `kubeadm init` fail with `unknown service runtime.v1.RuntimeService` on the first attempt. Root-caused via direct SSH on all 3 nodes, fixed with an idempotent `lineinfile: state: absent` task. See `plans/2026-09-16-kubeadm-bootstrap.md`. |
 | Cilium / Hubble | PLANNED | — |
 | MetalLB | PLANNED | — |
 | Istio + Gateway API | PLANNED | — |
@@ -51,17 +53,17 @@ Observability → Automation).
 
 ## Next milestone
 
-Phase 1 — Foundation: **done** (2026-09-16). Proxmox bootstrapped,
-template built, all 4 VMs deployed, guest-hardened, and verified.
+Phase 1 — Foundation: **done**. Phase 2 — Kubernetes bootstrap: **done**
+(2026-09-16). Proxmox bootstrapped, template built, all 4 VMs deployed and
+guest-hardened, 3-node Kubernetes cluster initialized and verified
+(`v1.37.0`, all nodes `NotReady` pending CNI).
 
-Phase 2/3 — Kubernetes bootstrap + remote access, next:
+Phase 3 — Cluster networking, next:
 
-1. **Human action**: run `playbooks/k8s-bootstrap.yml` against
-   `cp01`/`worker01`/`worker02` — role is written and validated, not yet
-   applied.
-2. Install Cilium (nodes will be `NotReady` until then).
-3. `vpn01`: install and configure Tailscale, advertise the
+1. Install Cilium + Hubble (nodes go `Ready` once CNI is up) — see
+   `docs/architecture/kubernetes.md`.
+2. `vpn01`: install and configure Tailscale, advertise the
    `192.168.1.0/24` subnet — see `docs/architecture/networking.md`. Not
-   blocking steps 1-2 (LAN access already works for building/testing).
+   blocking step 1 (LAN access already works for building/testing).
 
 Tracked in `plans/`.

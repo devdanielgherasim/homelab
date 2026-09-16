@@ -81,3 +81,13 @@ cross-role default dependency) between `kubeadm_prereqs` and
       matching the pattern already used correctly elsewhere in this repo.
       `ansible-lint` production profile re-verified clean after the fix.
       Re-run pending — see STATUS.md.
+
+**Re-run result (2026-09-16): full success.** `0 failed` on all 3 nodes.
+`kubeadm_prereqs` re-confirmed everything already correct (`ok`, not
+`changed`) and applied the CRI fix (`changed`). `kubeadm_init` succeeded
+on `cp01` — CoreDNS + kube-proxy addons applied, join token generated.
+Both workers joined (`changed: [worker01]`, `changed: [worker02]`).
+Verified directly with `kubectl get nodes -o wide` on `cp01`: all 3 nodes
+present (`cp01` control-plane, `worker01`/`worker02`), all `v1.37.0`,
+`containerd://2.3.5`, all `NotReady` — exactly as expected with no CNI
+installed yet. STATUS.md and ansible/README.md updated to DEPLOYED.

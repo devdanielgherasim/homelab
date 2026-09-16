@@ -156,11 +156,12 @@ nodes` until Cilium is installed — expected, not a failure of this role.**
 
 ## Status
 
-`proxmox_bootstrap`, `proxmox_template`, and `guest_hardening`: all
-deployed and verified. The `api_token` stage needed a follow-up fix
-(3 Proxmox RBAC namespaces, not just `PVEVMAdmin`) found via real
-OpenTofu apply 403s — see the header comment in
-`roles/proxmox_bootstrap/tasks/api_token.yml`. `kubeadm_prereqs` /
-`kubeadm_init` / `kubeadm_join`: generated, statically validated
-(`ansible-lint` production profile, `--syntax-check` both pass), **not
-yet run**. See [`../STATUS.md`](../STATUS.md).
+All five roles (`proxmox_bootstrap`, `proxmox_template`, `guest_hardening`,
+`kubeadm_prereqs`/`kubeadm_init`/`kubeadm_join`) are deployed and verified
+against the real hosts. Two real bugs found and fixed via actual rollout
+failures, not caught by static validation alone: `api_token` needed 3
+Proxmox RBAC namespaces, not just `PVEVMAdmin` (real `tofu apply` 403s —
+see `roles/proxmox_bootstrap/tasks/api_token.yml`); `kubeadm_init` failed
+on a default-disabled containerd CRI plugin shipped by the `containerd.io`
+apt package (see `roles/kubeadm_prereqs/tasks/containerd.yml`). See
+[`../STATUS.md`](../STATUS.md).
