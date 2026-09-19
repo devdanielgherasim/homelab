@@ -256,10 +256,18 @@ Approach: three read-only research agents in parallel (Argo CD; load balancer +
 Gateway API + Istio; observability), then implementation in disjoint directories,
 then one integration pass here. Nothing is applied to the cluster without approval.
 
-- [ ] G1. Argo CD (GitOps): bootstrap install from `kubernetes/bootstrap/argocd/`,
+- [x] G1. Argo CD (GitOps): bootstrap install from `kubernetes/bootstrap/argocd/`,
   root app-of-apps under `kubernetes/platform/`, Cilium stays bootstrap-managed
   (a CNI managed by the tool that runs on it can lock itself out), CRD-aware
   kubeconform in CI, ADR, sample app synced from Git, self-heal demonstrated.
+  - DONE 2026-09-20 with the owner's approval: commit `d1adfad` (CI green), then
+    namespace, `helm install`, three AppProjects and the root app. `argocd`,
+    `platform`, `podinfo` synced in 30 s; self-heal reverted a manual change in 3 s.
+    Lesson: memory requests came to 544 MiB, not the ~350 first estimated.
+  - Open: the owner must rotate the initial admin password and delete
+    `argocd-initial-admin-secret`. The `projects` Application (added afterwards) puts
+    the AppProjects under GitOps too.
+
 - [ ] G2. Load balancer (MetalLB or Cilium LB IPAM + L2, decided from research; an
   ADR either way) and the Gateway API CRDs.
 - [ ] G3. Istio + Gateway API gateway, cert-manager with a private CA if needed,

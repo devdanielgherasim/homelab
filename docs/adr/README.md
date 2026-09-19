@@ -20,18 +20,18 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0004](0004-opentofu-over-terraform.md) | OpenTofu instead of Terraform | Accepted |
 | [0005](0005-cilium-as-cni.md) | Cilium as CNI | Accepted |
 | [0006](0006-istio-gateway-api.md) | Istio + Kubernetes Gateway API for north-south traffic | Proposed |
-| [0007](0007-argocd-for-gitops.md) | Argo CD for GitOps | Proposed |
+| [0007](0007-argocd-for-gitops.md) | Argo CD for GitOps | Accepted |
 | [0008](0008-vpn-only-management-plane.md) | VPN-only management plane (Tailscale) | Proposed |
 | [0009](0009-flat-network-until-vpn.md) | Single flat network until the VPN and segmentation exist | Accepted |
 | [0010](0010-local-opentofu-state.md) | Local OpenTofu state for a single operator | Accepted |
 | [0011](0011-proxmox-api-token-privileges.md) | Privilege-separated Proxmox API token, scoped to a pool | Accepted |
 | [0012](0012-local-backups.md) | Backups stay on the Proxmox host, and cover only what has state | Accepted |
 | [0013](0013-control-plane-hardening.md) | Control-plane hardening, and what is deliberately left out | Accepted |
-| [0014](0014-gitops-structure.md) | GitOps structure: Argo CD app-of-apps, scoped projects, CNI outside GitOps | Proposed |
+| [0014](0014-gitops-structure.md) | GitOps structure: Argo CD app-of-apps, scoped projects, CNI outside GitOps | Accepted |
 | [0015](0015-loadbalancer-cilium-l2.md) | LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB | Proposed |
 
 New ADRs get the next sequential number and are added to this table.
 
-ADRs 0001-0005 are implemented and in use. 0006-0008 describe the platform
+ADRs 0001-0005, 0007 and 0014 are implemented and in use. 0006, 0008 and 0015 describe the platform
 layer that is not built yet and stay **Proposed** until the corresponding
 component is deployed and the decision is confirmed.

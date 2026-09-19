@@ -24,7 +24,7 @@ has not tested this combination. It is verified here by use (see
 |---|---|---|
 | `dex`, `notifications`, `redis-ha` | off | No SSO, no notifications, one Redis: less memory. |
 | `applicationSet.replicas` | `0` | One app-of-apps root is enough; raise it if a generator is needed. |
-| Resource requests | about 350 MiB in total | The cluster has about 5 GB free for the whole platform. |
+| Resource requests | 544 MiB in total (measured) | The cluster has about 5 GB free for the whole platform. |
 | `configs.cm.exec.enabled` | `false` | No shell into pods from the UI. |
 | `configs.rbac.policy.default` | `""` | Deny by default. |
 | NetworkPolicies | on (ingress only) | Cilium enforces them; egress stays open for GitHub and chart repositories. |

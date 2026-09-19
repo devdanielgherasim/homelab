@@ -1,6 +1,6 @@
 # 0007. Argo CD for GitOps
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-15
 
 ## Context

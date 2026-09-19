@@ -37,10 +37,10 @@ The roadmap and its numbering live in one place:
 | Kubernetes bootstrap (kubeadm, containerd) | DEPLOYED | `v1.37.0`, `containerd://2.3.5`; control plane and both workers `Ready`. |
 | Control-plane hardening (encryption at rest, audit log, Pod Security baseline, CIS fixes) | DEPLOYED, verified | `ansible/roles/kubeadm_init/`, `ansible/roles/kubelet_hardening/`, ADR-0013. Applied 2026-09-19 after a fresh etcd snapshot and `vzdump`; API unavailable for about 50 s while the static pods restarted. Verified independently: all 7 Secrets carry the `k8s:enc:secretbox` prefix when read from etcd, a privileged pod is refused in `default` and accepted in the exempt `kube-system`, audit log is written without Secret bodies. **CIS (kube-bench `cis-1.12`): 62 pass / 13 fail before, 76 pass / 2 fail after**; the 2 are accepted (1.2.5, 4.3.1), see `docs/security/cis-benchmark.md`. |
 | Proxmox API access for OpenTofu | DEPLOYED, verified | Custom role on a resource pool instead of `PVEVMAdmin` on `/` (ADR-0011). Tested with a temporary principal over verified TLS: full VM lifecycle passes, five dangerous operations return 403. Boot order of the VMs is set by Ansible (`proxmox_vm_startup`) because OpenTofu would need `Sys.Modify` on `/` for it. TLS is verified with the cluster CA. |
+| Argo CD (GitOps) | DEPLOYED, verified | Chart 10.9.2 (v3.5.3), `kubernetes/bootstrap/argocd/`, ADR-0007 and ADR-0014. Installed 2026-09-20: 5 pods `Running`, 544 MiB of memory requests, `restricted` Pod Security. Root app-of-apps plus three AppProjects; `argocd` (self-managed), `platform` and `podinfo` reached `Synced/Healthy` from Git in 30 s. Loop verified: a manual scale-up was reverted by self-heal in 3 s and a deleted Service was recreated in 3 s. The UI is reachable only by port-forward. **The initial admin password has to be rotated and `argocd-initial-admin-secret` deleted by the owner.** Argo CD 3.5 lists Kubernetes 1.33-1.36 as tested; the cluster runs 1.37. |
 | Cilium / Hubble | DEPLOYED, verified | Chart 1.20.2, `kubernetes/bootstrap/cilium/`. `kube-proxy` removed; `KubeProxyReplacement: True`; nodes `Ready`; `cilium connectivity test`: 82 tests successful, 0 failed (55 skipped, listed in the README there). Snapshots `pre-cilium` exist on the three nodes. Runs on Kubernetes 1.37, which is outside the 1.33-1.36 range upstream tests. |
 | MetalLB | PLANNED | — |
 | Istio + Gateway API | PLANNED | — |
-| Argo CD | PLANNED | — |
 | Kyverno / Trivy runtime scanning | PLANNED | Trivy config scan already runs in CI on IaC. |
 | SOPS + age | PLANNED | Blocked on the public-repo threat-model ADR. |
 | Prometheus / Grafana / Loki / Tempo | PLANNED | — |
@@ -59,7 +59,7 @@ Stated openly so nobody mistakes the target architecture for the current one.
 |---|---|---|
 | Network segmentation | Separate management, node and load-balancer networks | All VMs share one flat network on `vmbr0` with the household LAN |
 | Management access | VPN-only (ADR-0008) | The VPN path exists, but Proxmox UI, SSH and the Kubernetes API are still reachable directly from the LAN; the Proxmox firewall has not been narrowed to the VPN yet |
-| Cilium and Kubernetes versions | Inside the upstream-tested matrix | Cilium 1.20.2 lists Kubernetes 1.33-1.36; the cluster runs 1.37.0 |
+| Component versions vs Kubernetes | Inside the upstream-tested matrix | Cilium 1.20.2 and Argo CD 3.5 list Kubernetes 1.33-1.36; the cluster runs 1.37.0 |
 | VM storage | Headroom on the thin pool | `local-lvm` is over-provisioned (thin volumes exceed pool size); no autoextend threshold |
 | Kubelet serving certificates | CA-signed (CIS 1.2.5) | Self-signed; needs `serverTLSBootstrapping` and a CSR approver, deferred (ADR-0013) |
 | Availability | Learning-grade | Single physical host, single control-plane node |

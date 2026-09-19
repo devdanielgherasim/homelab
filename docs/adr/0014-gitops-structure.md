@@ -1,6 +1,6 @@
 # 0014. GitOps structure: Argo CD app-of-apps, scoped projects, CNI outside GitOps
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-20
 
 ## Context
@@ -33,7 +33,8 @@ has about 5 GB of free RAM in total, so Argo CD's footprint matters too.
   runs on top of it can lock itself out, and its values include the API server
   address, which is network topology.
 - **Small footprint.** No Dex, no notifications, no HA Redis, and the ApplicationSet
-  controller scaled to zero: about 350 MiB of requests.
+  controller scaled to zero: 544 MiB of memory requests (controller 256, server 128,
+  repo server 128, Redis 32).
 - **Public repository, no secrets.** Argo CD reads the repository over HTTPS without
   credentials. Anything secret (the Grafana admin password, the Argo CD admin
   password) is created in the cluster by hand and never appears in Git.
@@ -59,6 +60,6 @@ It uses only stable APIs, and is verified by use; the deviation is recorded in
 `STATUS.md`. Every push to `main` is a deployment once an Application points at that
 path, so the branch protection and required CI checks are now part of the delivery
 path, not just of code review. Applications added to the platform must be reviewed
-for their memory budget, because the cluster has little headroom. Status moves from
-Proposed to Accepted once the bootstrap has been applied and the loop
-(change in Git, sync, self-heal) has been observed.
+for their memory budget, because the cluster has little headroom. Accepted on 2026-09-20 after the bootstrap was applied and the loop was observed:
+the three Applications synced from Git in 30 seconds, a manual scale-up was reverted
+by self-heal in 3 seconds, and a deleted Service was recreated in 3 seconds.

@@ -1,0 +1,37 @@
+# The AppProjects themselves, managed from Git. They were applied by hand once (they
+# have to exist before any Application can use them); from then on a change to
+# kubernetes/bootstrap/argocd/projects.yaml, for example allowing a new chart
+# repository, reaches the cluster by way of Git like everything else.
+#
+# Only projects.yaml is taken from that directory: the other files there are one-time
+# bootstrap inputs (values, namespace, the root application).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: projects
+  namespace: argocd
+spec:
+  project: bootstrap
+  source:
+    repoURL: https://github.com/devdanielgherasim/homelab.git
+    targetRevision: main
+    path: kubernetes/bootstrap/argocd
+    directory:
+      include: projects.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # Prune off: removing a project from the file must never delete one that
+      # Applications still use.
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
