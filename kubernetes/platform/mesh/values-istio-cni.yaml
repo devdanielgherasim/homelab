@@ -1,0 +1,38 @@
+# Helm values for istio/cni 1.31.0: a DaemonSet that chains the istio-cni plugin
+# after Cilium, so sidecar pods do not need the privileged istio-init container
+# (a pod could then run under the `baseline` Pod Security level).
+# Every key was checked against `helm show values istio/cni --version 1.31.0`.
+#
+# Requires, in Cilium's own values: cni.exclusive=false (otherwise Cilium renames
+# the istio-cni config file and the plugin is never invoked) and
+# socketLB.hostNamespaceOnly=true. See README.md.
+
+# Images come from docker.io/istio at tag 1.31.0 (the chart defaults for global.hub
+# and global.tag), so neither is overridden here.
+
+# The DaemonSet also runs on the control plane (its default tolerations match
+# every taint), so the requests below are paid three times.
+resources:
+  requests:
+    cpu: 10m
+    memory: 50Mi
+  limits:
+    memory: 128Mi
+
+seccompProfile:
+  type: RuntimeDefault
+
+# Standard kubeadm paths; stated so they are visible, not because they differ.
+cniBinDir: /opt/cni/bin
+cniConfDir: /etc/cni/net.d
+chained: true
+
+repair:
+  # Fixes pods that started before the CNI plugin was ready, by configuring their
+  # network in place (needs CAP_SYS_ADMIN in the DaemonSet, allowed in istio-system).
+  enabled: true
+  repairPods: true
+
+# Kubernetes 1.30+ has the appArmorProfile securityContext field; the chart default
+# (true) still sets the deprecated annotation, which the API server warns about.
+useAppArmorAnnotation: false

@@ -1,0 +1,55 @@
+# Istio base chart: Istio's CRDs, cluster roles and the validating webhook.
+# This Application owns the istio-system namespace (and its Pod Security label);
+# istio-cni and istiod only rely on it existing, which the sync waves guarantee.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-base
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://blob.istio.io/istio-release/charts
+      chart: base
+      targetRevision: 1.31.0
+      helm:
+        releaseName: istio-base
+        valueFiles:
+          - $values/kubernetes/platform/mesh/values-istio-base.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  # istiod flips the validating webhook's failurePolicy to Fail and injects its CA
+  # bundle at runtime; without this Argo CD would show the app out of sync forever
+  # and selfHeal would keep reverting it.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istiod-default-validator
+      jqPathExpressions:
+        - .webhooks[].failurePolicy
+        - .webhooks[].clientConfig.caBundle
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    managedNamespaceMetadata:
+      labels:
+        # istio-cni mounts hostPath volumes, runs hostNetwork and needs CAP_SYS_ADMIN
+        # (pod repair), which baseline forbids.
+        pod-security.kubernetes.io/enforce: privileged
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

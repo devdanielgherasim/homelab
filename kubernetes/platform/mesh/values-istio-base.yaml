@@ -1,0 +1,11 @@
+# Helm values for istio/base 1.31.0 (CRDs, cluster roles, validation webhook).
+# Every key was checked against `helm show values istio/base --version 1.31.0`.
+#
+# The chart ships Istio's own CRDs as templates (base.enableCRDTemplates, default
+# true), so Argo CD manages and upgrades them. The defaults are right for this
+# cluster; the two flags below are set explicitly so a future chart bump that
+# changes a default does not silently change what is installed.
+
+base:
+  enableCRDTemplates: true
+  enableIstioConfigCRDs: true

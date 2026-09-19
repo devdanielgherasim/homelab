@@ -1,0 +1,39 @@
+# Istio CNI node agent (DaemonSet). Installed before istiod so that no sidecar pod
+# is ever injected for CNI mode while the plugin is missing.
+# Needs Cilium: cni.exclusive=false and socketLB.hostNamespaceOnly=true.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-cni
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://blob.istio.io/istio-release/charts
+      chart: cni
+      targetRevision: 1.31.0
+      helm:
+        releaseName: istio-cni
+        valueFiles:
+          - $values/kubernetes/platform/mesh/values-istio-cni.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

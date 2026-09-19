@@ -1,0 +1,55 @@
+# Istio control plane, sidecar mode with istio-cni, one small replica.
+# Also serves Gateway API: it registers GatewayClass istio and creates the gateway
+# Deployment and Service for each Gateway (requires the gateway-api Application).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istiod
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://blob.istio.io/istio-release/charts
+      chart: istiod
+      targetRevision: 1.31.0
+      helm:
+        releaseName: istiod
+        valueFiles:
+          - $values/kubernetes/platform/mesh/values-istiod.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  # istiod writes the CA bundle into the webhook configurations and flips the
+  # validating webhook to failurePolicy Fail once it is ready. Leave those fields
+  # alone or Argo CD reverts them on every sync.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: istio-sidecar-injector
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istio-validator-istio-system
+      jqPathExpressions:
+        - .webhooks[].failurePolicy
+        - .webhooks[].clientConfig.caBundle
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

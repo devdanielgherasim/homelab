@@ -1,0 +1,50 @@
+# Helm values for istio/istiod 1.31.0 (control plane, sidecar mode, no ambient).
+# Every key was checked against `helm show values istio/istiod --version 1.31.0`.
+#
+# Chart defaults target production: 2048Mi memory request, autoscaling 1 to 5
+# replicas. The workers here have about 2.5 GB free, so this is one small replica.
+
+autoscaleEnabled: false
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+seccompProfile:
+  type: RuntimeDefault
+
+env:
+  # About 80% of the memory limit, so the Go runtime collects before the kernel kills it.
+  GOMEMLIMIT: 400MiB
+
+# Inject the istio-cni-compatible sidecar template: no privileged istio-init
+# container, only the unprivileged istio-validation init container. This is
+# `cni.enabled` at the top level of the chart. The `pilot.cni.enabled` spelling used
+# in older documentation still works (the chart copies everything under `pilot` to
+# the top level), verified with `helm template --set pilot.cni.enabled=true`, but
+# `helm show values` only lists the top-level form, so that is the one used here.
+cni:
+  enabled: true
+  provider: default
+
+global:
+  proxy:
+    # Chart default is 100m / 128Mi requested, 1024Mi limit, per sidecar. Applies to
+    # sidecars and to the Envoy of Gateway API gateways that Istio creates.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+    seccompProfile:
+      type: RuntimeDefault
+
+gateways:
+  # For the Deployments Istio generates from a Gateway API Gateway.
+  seccompProfile:
+    type: RuntimeDefault
