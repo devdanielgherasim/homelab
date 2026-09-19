@@ -149,8 +149,25 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
   - Also open: TOTP two-factor on the Proxmox web UI (manual, in the UI) and
     checking that the router forwards no management ports (manual).
 - [ ] 17. Network segmentation (VLAN or bridges) per `networking.md`.
-- [ ] 18. DR: etcd snapshot CronJob/systemd timer, Proxmox `vzdump` schedule,
-  a tested restore, and the `docs/runbooks/` entries that come from it.
+- [x] 18. DR: etcd snapshot timer, Proxmox `vzdump` schedule, a tested
+  restore, and the runbook that comes from it.
+  - DONE 2026-09-19 with user approval. Scope decided with the owner: backups
+    stay on the Proxmox host (ADR-0012) and cover only etcd + `cp01`; the
+    workers and `vpn01` are disposable and are not backed up.
+  - Roles: `etcd_backup` (etcdctl/etcdutl 3.7.0 with checksum, systemd
+    timer, script with retention and verification, tested against stand-ins
+    in `scripts/test-roles.sh`), `proxmox_backup` (pvesh job, idempotence
+    verified end to end after a real bug: pvesh returns `prune-backups` as a
+    mapping; `--check` skips `command` tasks so it cannot prove drift
+    detection), `qemu_guest_agent` (was missing from every VM).
+  - Drills passed: etcd restore into scratch dir (revision 34688, 373 keys,
+    live etcd untouched); cp01 restored from vzdump into VMID 9100 with no
+    NIC, booted, data present.
+  - NOT done: recovering the live cluster from a snapshot; backing up the
+    OpenTofu state; copying backups off the host (declined by the owner).
+  - Cleanup done with the owner's approval: throwaway VM 9100 destroyed
+    (guarded: only if named cp01-restore-test and stopped); `pre-cilium`
+    snapshots on VMs 103 and 104 deleted; 102's kept as a rollback point.
 - [ ] 19. MetalLB, Gateway API + Istio, Argo CD (GitOps), Kyverno, cert-manager,
   observability — each with an ADR/doc update and STATUS.md change.
 - [ ] 20. Workflow: PRs with required status checks on `main`, signed commits.
@@ -162,18 +179,21 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
 
 ## Resume notes
 
-Tasks 1-10, 15, 16 done (vpn01 joined; owner confirmed the tunnel works from a
-phone; making the VPN the only path is deferred to task 17); 20 partial.
+Tasks 1-10, 15, 16, 18 done; 20 partial. Backups are live (etcd timer next
+fires 02:37 UTC; `homelab-daily` vzdump 03:30). Code from the tailscale role
+onward is uncommitted except what was pushed as `49ded15`: the backup roles,
+guest-agent role, playbooks, ADR-0012, runbook and docs are uncommitted.
 
-Two Cilium commits are local and unpushed; the tailscale role, test refactor
-and docs are uncommitted. Pushing needs the user's go-ahead.
+The throwaway VM and the worker snapshots are gone (approved and done). The
+`pre-cilium` snapshot of cp01 (VMID 102) is intentionally kept; delete it once
+the owner is comfortable, since it grows on the thin pool.
 
-Known Windows quirk: Norton Web Shield intercepts TLS to the API server, so
-kubectl on Windows fails with x509 while Lens works and WSL works. Not a
-cluster problem; do not use insecure-skip-tls-verify.
+Lesson worth keeping: under `--check`, `command` tasks are skipped, so a
+`--check` run can never prove that drift detection works. Test idempotence
+and drift with real runs on a reversible field.
 
-Waiting on the user: `PROXMOX_VE_*` for a real `tofu plan`. Code-only work still open: 11, 12, 13,
-14, 18 (18, backup/DR, is the most valuable: there are no backups today).
+Waiting on the user: `PROXMOX_VE_*` for a real `tofu plan`. Code-only work
+still open: 11, 12, 13, 14; new idea: back up the OpenTofu state.
 
 ## Verification
 

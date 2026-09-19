@@ -42,7 +42,8 @@ The roadmap and its numbering live in one place:
 | Kyverno / Trivy runtime scanning | PLANNED | Trivy config scan already runs in CI on IaC. |
 | SOPS + age | PLANNED | Blocked on the public-repo threat-model ADR. |
 | Prometheus / Grafana / Loki / Tempo | PLANNED | — |
-| Backups (Proxmox `vzdump`, etcd snapshots) | PLANNED | Not configured. Until they exist the lab is recoverable only by rebuilding from Git. |
+| Guest agent (`qemu-guest-agent`) | DEPLOYED, verified | `ansible/roles/qemu_guest_agent/`. It had never been installed in the VMs (the template comment claiming otherwise was wrong). Now `qm agent <vmid> ping` works on all four and each VM reports its address. |
+| Backups: etcd snapshot on `cp01`, Proxmox `vzdump` of `cp01` | DEPLOYED, verified | `ansible/roles/etcd_backup/`, `ansible/roles/proxmox_backup/`; scope and limits in ADR-0012. Daily verified etcd snapshot (373 keys, revision 34688, 9.4 MB) and a `vzdump` job for `cp01` (first run 50 s, 2.13 GB, agent freeze/thaw used). Restore drills passed: an etcd snapshot restored into a scratch directory (same revision and keys), and `cp01` restored into a throwaway VM without a NIC (booted, data present). Runbook: `docs/runbooks/backup-and-restore.md`. Workers and `vpn01` are deliberately not backed up. **Recovering the live cluster from a snapshot has not been exercised.** |
 | Self-hosted GitHub Actions runner | PLANNED | Trust boundary designed in `docs/security/self-hosted-runners.md`; no runner exists. |
 
 Incidents found and fixed during rollout are written up in
@@ -58,12 +59,11 @@ Stated openly so nobody mistakes the target architecture for the current one.
 | Management access | VPN-only (ADR-0008) | The VPN path exists, but Proxmox UI, SSH and the Kubernetes API are still reachable directly from the LAN; the Proxmox firewall has not been narrowed to the VPN yet |
 | Cilium and Kubernetes versions | Inside the upstream-tested matrix | Cilium 1.20.2 lists Kubernetes 1.33-1.36; the cluster runs 1.37.0 |
 | Hubble Relay TLS | Encrypted | Relay server TLS is off (in-cluster only); on the hardening list |
-| Guest agent | Running in every VM | `qemu-guest-agent` is not running, so Proxmox snapshots are crash-consistent and the provider cannot read VM IPs |
 | VM storage | Headroom on the thin pool | `local-lvm` is over-provisioned (thin volumes exceed pool size); no autoextend threshold |
 | Proxmox API RBAC | Least privilege | Token has `PVEVMAdmin` at `/` plus scoped storage and SDN roles |
 | Proxmox API TLS | Verified certificate | Provider runs with `insecure = true` for the self-signed certificate |
 | Availability | Learning-grade | Single physical host, single control-plane node |
-| Recovery | Documented and tested restore | No backups configured, no restore runbook yet |
+| Recovery | Off-host, tested copies | Backups exist but sit on the same disk as the VMs (ADR-0012); live-cluster recovery from an etcd snapshot is not exercised; the OpenTofu state file is not backed up |
 
 ## Blocked
 

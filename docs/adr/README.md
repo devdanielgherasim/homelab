@@ -25,6 +25,7 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0009](0009-flat-network-until-vpn.md) | Single flat network until the VPN and segmentation exist | Accepted |
 | [0010](0010-local-opentofu-state.md) | Local OpenTofu state for a single operator | Accepted |
 | [0011](0011-proxmox-api-token-privileges.md) | Privilege-separated Proxmox API token with built-in roles | Accepted |
+| [0012](0012-local-backups.md) | Backups stay on the Proxmox host, and cover only what has state | Accepted |
 
 New ADRs get the next sequential number and are added to this table.
 

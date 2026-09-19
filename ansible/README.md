@@ -28,11 +28,17 @@ ansible/
 │   ├── proxmox-template.yml    # builds the cloud-init VM template
 │   ├── guest-hardening.yml     # SSH hardening + unattended upgrades on the 4 VMs
 │   ├── tailscale.yml           # vpn01 as a Tailscale subnet router
+│   ├── guest-agent.yml         # qemu-guest-agent in the 4 VMs
+│   ├── etcd-backup.yml         # daily verified etcd snapshot on cp01
+│   ├── proxmox-backup.yml      # scheduled vzdump of cp01 on the Proxmox host
 │   └── k8s-bootstrap.yml       # containerd + kubeadm init/join on cp01/worker01/worker02
 └── roles/
     ├── proxmox_bootstrap/      # network check, API token, SSH key, firewall — staged, see below
     ├── proxmox_template/       # builds the Ubuntu 24.04 cloud-init VM template tofu/ clones from
     ├── guest_hardening/        # SSH defense-in-depth + unattended-upgrades on vpn01/cp01/worker01/worker02
+    ├── qemu_guest_agent/       # guest side of the Proxmox agent channel — the 4 VMs
+    ├── etcd_backup/            # etcdctl/etcdutl at the running version, snapshot script + systemd timer — cp01
+    ├── proxmox_backup/         # cluster-level vzdump job via pvesh — Proxmox host
     ├── tailscale/              # Tailscale client from the signed apt repo, IP forwarding, tailnet join — vpn01 only
     ├── kubeadm_prereqs/        # containerd, kubeadm/kubelet/kubectl, swap/kernel/sysctl — all k8s nodes
     ├── kubeadm_init/           # `kubeadm init` — cp01 only
