@@ -36,12 +36,12 @@ Only about 5 GiB of memory is free across the two workers for the whole platform
 | Prometheus | prometheus 100m/300Mi, config-reloader 10m/16Mi | 110m | 316Mi | 732Mi |
 | Prometheus Operator | 20m/48Mi | 20m | 48Mi | 128Mi |
 | kube-state-metrics | 10m/48Mi | 10m | 48Mi | 128Mi |
-| Grafana | grafana 50m/128Mi, two sidecars 10m/32Mi each | 70m | 192Mi | 384Mi |
+| Grafana | grafana 50m/128Mi, two sidecars 10m/48Mi each | 70m | 224Mi | 512Mi |
 | node-exporter (x3 nodes) | 10m/24Mi each | 30m | 72Mi | 192Mi |
-| **Total** | | **240m** | **676Mi** | **1564Mi** |
+| **Total** | | **240m** | **708Mi** | **1692Mi** |
 
-Of the 676Mi, 48Mi is the control-plane node-exporter, so the load on the two workers is 628Mi of
-requests. CPU limits are not set on purpose (throttling a metrics stack helps nobody). The
+Of the 708Mi, 24Mi is the control-plane node-exporter, so the load on the two workers is 684Mi of
+requests. (The sidecars were first set to 32Mi/64Mi and were OOM-killed at start-up.) CPU limits are not set on purpose (throttling a metrics stack helps nobody). The
 Prometheus memory limit (700Mi) is the one to watch: memory grows with the number of series. If it
 is OOM-killed after Cilium and Istio start shipping ServiceMonitors, raise the limit first, then the
 request.
@@ -79,29 +79,23 @@ The Prometheus data lives in an `emptyDir` (2Gi size limit, 1GiB `retentionSize`
 
 ## Pod Security
 
-The `monitoring` namespace is labelled by the Argo Application (`managedNamespaceMetadata`):
-`enforce=privileged`, `audit=baseline`, `warn=baseline`. node-exporter needs `hostNetwork`,
+The `monitoring` namespace is created and labelled by the platform stage
+(`tofu/environments/platform/secrets.tf`): `enforce=privileged`, `audit=baseline`,
+`warn=baseline`. node-exporter needs `hostNetwork`,
 `hostPID` and `hostPath` volumes, which only `privileged` admits. Grafana, kube-state-metrics and
 the operator pass the `restricted` profile. A `baseline` warning on node-exporter is expected;
 anything else that warns is new and worth a look.
 
-## Create the Grafana admin Secret (before the first sync)
+## The Grafana admin Secret
 
-The credentials are not in Git. Create the Secret out of band; the Grafana pod stays in
-`CreateContainerConfigError` until it exists, then starts on its own.
-
-```sh
-kubectl create namespace monitoring
-kubectl -n monitoring create secret generic grafana-admin \
-  --from-literal=admin-user=admin \
-  --from-literal=admin-password="$(openssl rand -base64 24)"
-```
-
-Argo CD's `CreateNamespace=true` accepts a namespace that already exists and adds the Pod Security
-labels to it. To read the password back:
+The credentials are not in Git and are not created by hand: the platform stage
+(`tofu/environments/platform`, [ADR-0016](../../../docs/adr/0016-platform-bootstrap-with-opentofu.md))
+generates the password and creates the `grafana-admin` Secret together with the namespace, before
+Argo CD syncs this stack. If the Secret is missing the Grafana pod stays in
+`CreateContainerConfigError`. To read the password:
 
 ```sh
-kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
+cd tofu/environments/platform && tofu output -raw grafana_admin_password
 ```
 
 Log in as `admin` with that password. Dashboards provisioned from Git are not editable in the UI

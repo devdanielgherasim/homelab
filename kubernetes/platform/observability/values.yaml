@@ -1,6 +1,6 @@
 # kube-prometheus-stack 91.4.1 (operator v0.94.0), trimmed for a small homelab cluster.
 # Consumed by kubernetes/platform/apps/kube-prometheus-stack.yaml. Read ./README.md for
-# the RAM budget, what is deliberately off, and the out-of-band Grafana admin Secret.
+# the RAM budget, what is deliberately off, and where the Grafana admin Secret comes from.
 #
 # Every key below was checked against `helm show values` and `helm template` for 91.4.1.
 
@@ -177,12 +177,14 @@ grafana:
   rbac:
     namespaced: true
   sidecar:
+    # 64Mi was tried first and both sidecars were OOMKilled in a loop: the k8s-sidecar image
+    # is a Python process with the Kubernetes client and needs more than that at start-up.
     resources:
       requests:
         cpu: 10m
-        memory: 32Mi
+        memory: 48Mi
       limits:
-        memory: 64Mi
+        memory: 128Mi
     dashboards:
       resource: configmap
       searchNamespace: monitoring

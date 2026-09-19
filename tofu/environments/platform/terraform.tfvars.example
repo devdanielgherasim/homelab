@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (gitignored) and fill in the real values. See
+# docs/security/public-repository.md: nothing that identifies the network goes in Git.
+
+# Kubernetes API server address (the control-plane node).
+k8s_service_host = "10.10.20.11"
+
+# Free addresses on the nodes' subnet, outside the router's DHCP range.
+lb_pool_blocks = [
+  { start = "10.10.20.240", stop = "10.10.20.249" },
+]

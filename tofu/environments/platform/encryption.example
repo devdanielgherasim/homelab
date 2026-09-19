@@ -1,0 +1,24 @@
+# State encryption for this environment. The state holds the generated passwords.
+#
+# Put the HCL below in the TF_ENCRYPTION environment variable, with a passphrase of at least
+# 16 characters that you keep in a password manager. Without the passphrase the state
+# cannot be read, so store it somewhere that survives the loss of this machine.
+#
+#   export TF_ENCRYPTION='
+#   key_provider "pbkdf2" "main" {
+#     passphrase = "<a long passphrase>"
+#   }
+#   method "aes_gcm" "main" {
+#     keys = key_provider.pbkdf2.main
+#   }
+#   state {
+#     method   = method.aes_gcm.main
+#     enforced = true
+#   }
+#   plan {
+#     method   = method.aes_gcm.main
+#     enforced = true
+#   }
+#   '
+#
+# `enforced = true` makes tofu refuse to read or write an unencrypted state.

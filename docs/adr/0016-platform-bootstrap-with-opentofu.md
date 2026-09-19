@@ -1,0 +1,73 @@
+# 0016. Platform bootstrap with OpenTofu, not by hand
+
+Status: Proposed
+Date: 2026-09-20
+
+## Context
+
+ADR-0014 puts everything that runs on the cluster under Argo CD, except what Argo CD
+needs in order to exist: the CNI (Cilium), Argo CD itself, its projects and root
+Application, and the few Secrets that cannot be in a public repository. Those were
+installed with `helm` and `kubectl` typed by an operator, and the Grafana admin Secret
+and the `monitoring` namespace were created the same way. Nothing in Git could rebuild
+them: a cluster rebuilt from the repository would come up without a CNI and without a
+GitOps controller, and the steps to fix that lived in READMEs and in a shell history.
+
+The requirement is that the whole environment is reproducible from zero, from Git, with no
+manual step.
+
+## Decision
+
+Add a second OpenTofu stage, `tofu/environments/platform`, that runs after Ansible has
+built the cluster and produces everything the GitOps controller depends on:
+
+- **Cilium** as a `helm_release`, with the values file that is already in
+  `kubernetes/bootstrap/cilium/`. The API server address is a private variable.
+- **Argo CD** as a `helm_release` from the same values file the self-managing Application
+  uses; the chart version is read from `kubernetes/platform/apps/argocd.yaml`, so there is
+  one place to change it. The admin password is generated (`random_password`) and stored
+  as a bcrypt hash; the initial admin Secret is never created.
+- **AppProjects and the root Application** from the YAML files that are in Git
+  (`kubectl_manifest`, which does not need the CRDs at plan time).
+- **The LoadBalancer pool** (real LAN addresses) from a private, gitignored variable file,
+  replacing the Ansible role that did the same.
+- **Namespaces that need a Secret before Argo CD syncs them, and those Secrets**
+  (`monitoring`, `grafana-admin`), generated with `random_password`.
+
+State holds the generated passwords, so it is encrypted with OpenTofu's native state
+encryption; the passphrase comes from the environment (`TF_ENCRYPTION`), never from the
+repository. State stays local and gitignored, like the first stage.
+
+Everything else stays with Argo CD. The Ansible stage keeps building the nodes and
+kubeadm, and gains a playbook that fetches the kubeconfig to a private local path, so no
+one copies it by hand. The chain is: `tofu` (VMs), Ansible (kubeadm), `tofu` (platform),
+Argo CD.
+
+## Alternatives considered
+
+- **Ansible for the platform bootstrap too.** One tool fewer, but `helm_release` gives
+  plan, diff and import for free, and the owner asked for OpenTofu. Ansible remains the
+  right tool for the nodes.
+- **Argo CD installs itself (`argocd-autopilot` or a kustomize `kubectl apply`).** Still a
+  manual command, and it leaves the Secrets and the CNI out.
+- **SOPS + age for the generated Secrets.** Encrypted secrets in Git are still planned for
+  the workloads that need a value chosen by a person. For passwords nobody has to know in
+  advance, generating them at bootstrap needs no key management and leaves nothing in Git.
+- **The `kubernetes_manifest` resource for the Argo CD objects.** It needs the CRD to exist
+  when the plan is made, which is not true on a fresh cluster. `kubectl_manifest` from the
+  `alekc/kubectl` provider has no such need; the trade-off is a community provider.
+
+## Consequences
+
+The bootstrap is reviewable (`tofu plan`), repeatable and importable, and the manual steps
+in the READMEs disappear. The running cluster is adopted with `tofu import`, not rebuilt.
+Applying the stage rotates the Argo CD admin password and recreates the Grafana Secret;
+Argo CD restarts its server pod once.
+
+Costs: a second state file to protect and back up (encrypted, but the passphrase must
+be stored somewhere safe outside the repository); Cilium is now changed through a tofu
+apply, which is the one place where a bad plan can cut the cluster's network, so its plan
+is read before every apply; the Argo CD chart is installed by two systems (tofu at
+bootstrap, Argo CD afterwards), which is safe only because both read the same values file
+and version. Whether the rebuild really works is proved by rebuilding the cluster, not by
+reading the code (plan task P8 in `plans/2026-09-19-professionalize-repo.md`).

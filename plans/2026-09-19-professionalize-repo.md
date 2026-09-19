@@ -2,7 +2,7 @@
 title: Professionalize the homelab repository (fix CI, docs, security baseline, DR)
 status: in-progress
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # Professionalize the homelab repository
@@ -288,8 +288,46 @@ then one integration pass here. Nothing is applied to the cluster without approv
 - [ ] G4. Observability (Prometheus + Grafana, Hubble metrics, capacity dashboards
   for later autoscaling), logs only if they fit in RAM, storage decision without a
   StorageClass.
+  - Pushed `d5a4c71`: stack Synced; Prometheus, operator, kube-state-metrics and the
+    three node-exporters run. Grafana sidecars were OOMKilled at 64Mi; fix (128Mi
+    limit, README budget 708Mi) is local, not pushed. The `monitoring` namespace and
+    the `grafana-admin` Secret were created BY HAND: to be replaced by task P4.
+  - Open: verify targets/rules/dashboard, Cilium and Hubble metrics.
 - [ ] G5. Kyverno policies and Trivy operator (if RAM allows), NetworkPolicies
   default-deny per namespace.
+
+### P. Bootstrap as code (owner's requirement, 2026-09-20)
+
+"No manual steps in the bootstrap; everything in Git and reproducible from zero."
+Design in ADR-0016: a second OpenTofu stage, `tofu/environments/platform`, with the
+helm, kubernetes, kubectl and random providers, run after Ansible has built the cluster.
+
+- [ ] P1. ADR-0016 and this plan (done when both are in Git).
+- [ ] P2. Kubeconfig without hand-copying: Ansible playbook that fetches
+  `admin.conf` to a private local path (mode 0600, gitignored).
+- [x] P3. Skeleton `tofu/environments/platform`: provider pins from a real `tofu init`,
+  encrypted state (`TF_ENCRYPTION`), `.example` tfvars, CI validate passes.
+- [x] P4. Resources: Cilium (`helm_release`), namespaces, Argo CD (`helm_release`,
+  chart version read from `platform/apps/argocd.yaml`, generated admin password),
+  AppProjects and root Application from the existing YAML files, LB pool from private
+  tfvars, `monitoring` namespace and `grafana-admin` Secret (`random_password`).
+- [ ] P5. Adopt the running cluster: `tofu import`, then a plan that shows only the
+  expected differences; apply with the owner's approval (Argo CD admin password is
+  rotated by this apply, Grafana Secret is recreated).
+  - Plan read 2026-09-20 (read-only, `imports.tf`): 5 import, 2 add (the two generated
+    passwords), 5 change, 0 destroy. Helm releases show a values diff that is only the
+    import artifact (same content). Next: the owner approves the apply. Private inputs
+    (`terraform.tfvars`, state passphrase in `~/.tofu-platform-passphrase` in WSL) exist
+    locally; the passphrase must be copied to a password manager.
+  - Playbook `k8s-kubeconfig.yml` (P2) is written and lint-clean, not yet run.
+- [ ] P6. Remove the manual paths: Ansible role `cilium_lb_pool`, the `kubectl`/`helm`
+  install steps in the READMEs, `CreateNamespace` for `monitoring` in the Application;
+  update ADR-0014, STATUS, runbook.
+- [ ] P7. One entry point (`make bootstrap` or a script) that chains tofu VMs, Ansible,
+  kubeconfig, tofu platform.
+- [ ] P8. Proof from zero: rebuild the cluster VMs and run the chain end to end. Needs
+  the owner's explicit approval (destroys and recreates the running cluster; etcd
+  backups exist; expected downtime a few hours).
 
 ## Resume notes
 

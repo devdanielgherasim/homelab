@@ -1,8 +1,9 @@
 # Metrics and dashboards: Prometheus Operator, Prometheus, kube-state-metrics, node-exporter
 # and Grafana, trimmed for a small cluster. Values and rationale: kubernetes/platform/observability/.
 #
-# Before the first sync, create the Grafana admin Secret out of band (it is not in Git):
-#   see kubernetes/platform/observability/README.md
+# The namespace and the Grafana admin Secret come from the platform stage
+# (tofu/environments/platform), not from Git or by hand; see
+# kubernetes/platform/observability/README.md.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -33,17 +34,13 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+      # The monitoring namespace, with its Pod Security labels, and the grafana-admin Secret
+      # are created by the platform stage (tofu/environments/platform, ADR-0016), because the
+      # Secret has to exist before this Application syncs. Argo CD does not create it.
+      #
       # Required: the Prometheus and Alertmanager CRDs exceed the 256 KiB limit of the
       # last-applied-configuration annotation that client-side apply writes.
       - ServerSideApply=true
-    managedNamespaceMetadata:
-      labels:
-        # node-exporter needs hostNetwork, hostPID and hostPath mounts, which only the
-        # privileged level allows. Everything else in the namespace is restricted-compliant.
-        pod-security.kubernetes.io/enforce: privileged
-        pod-security.kubernetes.io/audit: baseline
-        pod-security.kubernetes.io/warn: baseline
     retry:
       limit: 5
       backoff:
