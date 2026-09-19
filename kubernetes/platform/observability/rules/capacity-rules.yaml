@@ -1,0 +1,97 @@
+# Capacity recording rules and alerts, built from kube-state-metrics series only.
+# Picked up by Prometheus because it selects PrometheusRules from every namespace without
+# requiring the chart's release label (values.yaml: ruleSelectorNilUsesHelmValues=false).
+#
+# "Requested" means the requests of Pending and Running pods that are placed on a node
+# (the node label is non-empty). Succeeded and Failed pods have released their requests.
+# Pods with no node yet are shown separately (homelab:pods_unschedulable:count and the
+# dashboard) because they are demand, not usage.
+#
+# There is no Alertmanager, so alerts show up in the Prometheus UI (Alerts page) and in Grafana,
+# nowhere else.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-capacity
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: homelab-capacity
+    app.kubernetes.io/part-of: observability
+spec:
+  groups:
+    - name: homelab-capacity.recording
+      interval: 30s
+      rules:
+        - record: homelab:node_memory_requested_bytes:sum
+          expr: |
+            sum by (node) (
+              kube_pod_container_resource_requests{resource="memory", node!=""}
+              * on (namespace, pod) group_left ()
+              (kube_pod_status_phase{phase=~"Pending|Running"} == 1)
+            )
+        - record: homelab:node_cpu_requested_cores:sum
+          expr: |
+            sum by (node) (
+              kube_pod_container_resource_requests{resource="cpu", node!=""}
+              * on (namespace, pod) group_left ()
+              (kube_pod_status_phase{phase=~"Pending|Running"} == 1)
+            )
+        # Requested / allocatable per node. `or alloc * 0` keeps nodes that have no requests at 0
+        # instead of dropping them from the result.
+        - record: homelab:node_memory_requests:ratio
+          expr: |
+            (
+              homelab:node_memory_requested_bytes:sum
+              or
+              (sum by (node) (kube_node_status_allocatable{resource="memory"}) * 0)
+            )
+            / on (node)
+            sum by (node) (kube_node_status_allocatable{resource="memory"})
+        - record: homelab:node_cpu_requests:ratio
+          expr: |
+            (
+              homelab:node_cpu_requested_cores:sum
+              or
+              (sum by (node) (kube_node_status_allocatable{resource="cpu"}) * 0)
+            )
+            / on (node)
+            sum by (node) (kube_node_status_allocatable{resource="cpu"})
+        - record: homelab:cluster_memory_requests:ratio
+          expr: |
+            sum(homelab:node_memory_requested_bytes:sum)
+            /
+            sum(kube_node_status_allocatable{resource="memory"})
+        - record: homelab:cluster_cpu_requests:ratio
+          expr: |
+            sum(homelab:node_cpu_requested_cores:sum)
+            /
+            sum(kube_node_status_allocatable{resource="cpu"})
+        - record: homelab:pods_pending:count
+          expr: sum(kube_pod_status_phase{phase="Pending"}) or vector(0)
+        - record: homelab:pods_unschedulable:count
+          expr: sum(kube_pod_status_unschedulable) or vector(0)
+
+    - name: homelab-capacity.alerts
+      rules:
+        - alert: ClusterMemoryRequestsHigh
+          expr: homelab:cluster_memory_requests:ratio > 0.8
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Cluster memory requests are above 80% of allocatable
+            description: >-
+              Pods have requested {{ $value | humanizePercentage }} of the memory that nodes can
+              allocate, for 10 minutes. New pods with sizeable requests may soon fail to schedule.
+              Open the "Homelab / Capacity" dashboard, or free requests before adding workloads.
+        - alert: PodsUnschedulable
+          expr: homelab:pods_unschedulable:count > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: One or more pods cannot be scheduled
+            description: >-
+              {{ $value }} pod(s) have been Unschedulable for 5 minutes: no node has enough allocatable
+              memory or CPU, or a taint / affinity rule excludes every node. List them with
+              `kubectl get pods -A --field-selector=status.phase=Pending` and `kubectl describe pod`.

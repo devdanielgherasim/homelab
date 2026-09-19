@@ -1,0 +1,204 @@
+# kube-prometheus-stack 91.4.1 (operator v0.94.0), trimmed for a small homelab cluster.
+# Consumed by kubernetes/platform/apps/kube-prometheus-stack.yaml. Read ./README.md for
+# the RAM budget, what is deliberately off, and the out-of-band Grafana admin Secret.
+#
+# Every key below was checked against `helm show values` and `helm template` for 91.4.1.
+
+# Do not add a `fullnameOverride`: the dashboards README and the port-forward commands
+# assume the default names (kube-prometheus-stack-prometheus, kube-prometheus-stack-grafana).
+
+crds:
+  enabled: true # CRDs come from the chart; the Application applies them with ServerSideApply
+
+# Alerts are still evaluated by Prometheus and visible in its UI; there is nothing to route
+# them to. Turn Alertmanager on when there is a receiver worth waking up for.
+alertmanager:
+  enabled: false
+
+# Rule groups for components that this cluster does not scrape. Leaving them on would
+# create alerts that fire (or evaluate against absent series) forever.
+defaultRules:
+  create: true
+  rules:
+    alertmanager: false
+    etcd: false
+    kubeControllerManager: false
+    kubeProxy: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    windows: false
+
+# kubeadm binds the control-plane components to 127.0.0.1, so Prometheus cannot reach them.
+# Enabling scheduler/etcd scraping later needs kubeadm bind-address / listen-metrics-urls
+# changes first (see README). kube-proxy does not exist: Cilium replaces it.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# The 10s defaults exist to match the kubelet's cAdvisor housekeeping interval. 30s is plenty
+# for a homelab and cuts sample volume to a third. `interval` wins over the two below it.
+kubelet:
+  serviceMonitor:
+    interval: 30s
+    cAdvisorInterval: 30s
+    resourceInterval: 30s
+
+prometheusOperator:
+  # Webhooks off: they need a certificate-patch job or cert-manager, and the operator's own
+  # TLS listener depends on that certificate. Rules are validated by the operator instead.
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+  resources:
+    requests:
+      cpu: 20m
+      memory: 48Mi
+    limits:
+      memory: 128Mi
+  # The operator hands these to the config-reloader containers it injects into the
+  # Prometheus pod (a regular container plus an init container).
+  prometheusConfigReloader:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    retention: 3d
+    # Kept below the emptyDir sizeLimit so Prometheus trims data before the kubelet would
+    # evict the pod for exceeding it (WAL and compaction need headroom above the cap).
+    retentionSize: 1GiB
+    # Select ServiceMonitors, PodMonitors, Probes, ScrapeConfigs and PrometheusRules from every
+    # namespace and without the release label, because Cilium and Istio ship their own.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    # No StorageClass in this cluster: metrics live in an emptyDir and are lost when the pod
+    # is rescheduled. Acceptable for 3 days of capacity data.
+    storageSpec:
+      emptyDir:
+        sizeLimit: 2Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 300Mi
+      limits:
+        memory: 700Mi
+
+kube-state-metrics:
+  # The chart default watches (and is granted cluster-wide list/watch on) 28 resource kinds,
+  # including every Secret and ConfigMap. The capacity dashboard, the recording rules and the
+  # chart's default rules need only the kinds below, so the rest are dropped: less RBAC, less RAM.
+  collectors:
+    - cronjobs
+    - daemonsets
+    - deployments
+    - horizontalpodautoscalers
+    - jobs
+    - limitranges
+    - namespaces
+    - nodes
+    - persistentvolumeclaims
+    - persistentvolumes
+    - poddisruptionbudgets
+    - pods
+    - replicasets
+    - resourcequotas
+    - services
+    - statefulsets
+  resources:
+    requests:
+      cpu: 10m
+      memory: 48Mi
+    limits:
+      memory: 128Mi
+
+# Linux only: the chart also renders dashboards and rules for AIX and macOS by default.
+nodeExporter:
+  operatingSystems:
+    aix:
+      enabled: false
+    darwin:
+      enabled: false
+
+# Needs hostNetwork, hostPID and hostPath mounts, so it is the reason the whole `monitoring`
+# namespace is labelled pod-security enforce=privileged. It runs on the control plane too
+# (the chart tolerates NoSchedule).
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 24Mi
+    limits:
+      memory: 64Mi
+
+grafana:
+  # Credentials come from a Secret that is deliberately not in Git; see README.
+  # The pod stays in CreateContainerConfigError until `grafana-admin` exists in `monitoring`.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # No PVC: state is empty by design. Dashboards and datasources are provisioned from
+  # ConfigMaps, so a restarted pod reconstructs everything.
+  persistence:
+    enabled: false
+  initChownData:
+    enabled: false
+  testFramework:
+    enabled: false
+  grafana.ini:
+    analytics:
+      check_for_updates: false
+      reporting_enabled: false
+    # No anonymous access: everyone signs in. The Service is ClusterIP and reached by
+    # port-forward or Tailscale only.
+    auth.anonymous:
+      enabled: false
+    users:
+      viewers_can_edit: false
+  # The chart default gives the sidecars a ClusterRole that can read every ConfigMap AND Secret
+  # in the cluster. Confine them to a Role in this namespace and to ConfigMaps only.
+  # Consequence: dashboards and datasources must live in the `monitoring` namespace
+  # (Cilium and Istio dashboard ConfigMaps too; see README).
+  rbac:
+    namespaced: true
+  sidecar:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 64Mi
+    dashboards:
+      resource: configmap
+      searchNamespace: monitoring
+      # The grafana_folder annotation on a ConfigMap chooses the Grafana folder; that needs
+      # both settings below.
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+        allowUiUpdates: false
+    datasources:
+      resource: configmap
+      alertmanager:
+        enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi

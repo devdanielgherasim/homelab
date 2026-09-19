@@ -1,0 +1,52 @@
+# Metrics and dashboards: Prometheus Operator, Prometheus, kube-state-metrics, node-exporter
+# and Grafana, trimmed for a small cluster. Values and rationale: kubernetes/platform/observability/.
+#
+# Before the first sync, create the Grafana admin Secret out of band (it is not in Git):
+#   see kubernetes/platform/observability/README.md
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    # Installs the monitoring.coreos.com CRDs, so it must be healthy before the
+    # observability-dashboards Application (wave 11), which ships a PrometheusRule.
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 91.4.1
+      helm:
+        releaseName: kube-prometheus-stack
+        valueFiles:
+          - $values/kubernetes/platform/observability/values.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Required: the Prometheus and Alertmanager CRDs exceed the 256 KiB limit of the
+      # last-applied-configuration annotation that client-side apply writes.
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        # node-exporter needs hostNetwork, hostPID and hostPath mounts, which only the
+        # privileged level allows. Everything else in the namespace is restricted-compliant.
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/audit: baseline
+        pod-security.kubernetes.io/warn: baseline
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

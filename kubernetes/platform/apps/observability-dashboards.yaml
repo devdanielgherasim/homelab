@@ -1,0 +1,41 @@
+# Grafana dashboards (ConfigMaps picked up by the Grafana sidecar) and Prometheus rules
+# (PrometheusRule) that belong to the observability stack. Plain manifests kept in Git,
+# so they are a directory source rather than part of the chart's values.
+#
+# The namespace and its Pod Security labels are owned by the kube-prometheus-stack
+# Application, so this one neither creates nor labels it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-dashboards
+  namespace: argocd
+  annotations:
+    # After kube-prometheus-stack (wave 10): the PrometheusRule needs its CRD.
+    argocd.argoproj.io/sync-wave: "11"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      path: kubernetes/platform/observability/dashboards
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      path: kubernetes/platform/observability/rules
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      # If this ever syncs before the stack has installed the CRDs, retry instead of
+      # failing the dry run on the unknown PrometheusRule kind.
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
