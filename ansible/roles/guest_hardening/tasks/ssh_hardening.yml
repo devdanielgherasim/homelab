@@ -1,38 +1,73 @@
 ---
-# Defense in depth, not removal of a working access path: cloud-init
-# never set a password for the `ubuntu` user in the first place (only
-# the admin SSH key), so there's no functioning password-based login
-# being closed off here — unlike proxmox_bootstrap's ssh_lockdown, which
-# is why this doesn't need that stage's interactive-confirmation/
-# independent-reverification treatment. Still validated with `sshd -t`
-# before restart, so a config typo fails this task instead of breaking SSH.
+# SSH hardening as a drop-in, not by editing /etc/ssh/sshd_config.
+#
+# Why a drop-in: sshd applies the FIRST value it sees for a keyword, and
+# Ubuntu's sshd_config starts with `Include /etc/ssh/sshd_config.d/*.conf`.
+# A `lineinfile` edit further down the main file can therefore be silently
+# overridden by any drop-in (cloud-init ships 50-cloud-init.conf). A file
+# named 00-* sorts first and wins, and the effective configuration is then
+# asserted with `sshd -T` instead of trusting that the file was written.
+#
+# Defense in depth, not removal of a working access path: cloud-init never
+# set a password for the admin user, so no password login is being closed.
+# The config is validated with `sshd -t` before sshd is reloaded, and the
+# allow-list must contain the account Ansible connects with — see
+# guest_hardening_ssh_allow_users.
 
-- name: Disable SSH password authentication
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?\s*PasswordAuthentication\s'
-    line: "PasswordAuthentication no"
-    validate: "sshd -t -f %s"
+- name: Refuse to lock out the account Ansible is connecting with
+  ansible.builtin.assert:
+    that:
+      # ansible_user, not ansible_facts.user_id: facts are gathered under become, so that is root.
+      - ansible_user in guest_hardening_ssh_allow_users
+    fail_msg: >-
+      guest_hardening_ssh_allow_users ({{ guest_hardening_ssh_allow_users | join(', ') }})
+      does not include the connecting account, which would lock Ansible out
+      after sshd reloads. Add it before running this role.
+    quiet: true
+
+- name: Install the SSH hardening drop-in
+  ansible.builtin.template:
+    src: sshd_00-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    # Checks the fragment itself before it replaces the live file.
+    validate: "/usr/sbin/sshd -t -f %s"
   become: true
+  notify: Reload sshd
 
-- name: Disable root SSH login entirely
-  # No key is provisioned for root on these guests (only `ubuntu`) — this
-  # makes that explicit in config rather than relying on "no key exists".
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?\s*PermitRootLogin\s'
-    line: "PermitRootLogin no"
-    validate: "sshd -t -f %s"
-  become: true
-
-- name: Validate final sshd config before restart
+- name: Validate the complete sshd configuration
   ansible.builtin.command:
-    cmd: "sshd -t"
+    cmd: /usr/sbin/sshd -t
   become: true
   changed_when: false
 
-- name: Restart sshd to apply
-  ansible.builtin.systemd:
-    name: ssh
-    state: restarted
+# Applied now rather than at the end of the play, so the assertion below
+# reads the state sshd will actually run with.
+- name: Apply pending sshd changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the effective sshd configuration
+  ansible.builtin.command:
+    cmd: /usr/sbin/sshd -T
   become: true
+  changed_when: false
+  register: guest_hardening_sshd_effective
+
+- name: Assert the effective configuration matches the policy
+  # `sshd -T` prints the configuration sshd will really use, after all
+  # includes and first-match-wins resolution.
+  ansible.builtin.assert:
+    that:
+      - "'passwordauthentication no' in guest_hardening_sshd_effective.stdout_lines"
+      - "'kbdinteractiveauthentication no' in guest_hardening_sshd_effective.stdout_lines"
+      - "'permitrootlogin no' in guest_hardening_sshd_effective.stdout_lines"
+      - "'pubkeyauthentication yes' in guest_hardening_sshd_effective.stdout_lines"
+      - "'x11forwarding no' in guest_hardening_sshd_effective.stdout_lines"
+      - "('maxauthtries ' ~ guest_hardening_ssh_max_auth_tries) in guest_hardening_sshd_effective.stdout_lines"
+    fail_msg: >-
+      The effective sshd configuration does not match the hardening policy.
+      Another file under /etc/ssh/sshd_config.d/ or in sshd_config is
+      overriding 00-hardening.conf — inspect `sshd -T`.
+    quiet: true

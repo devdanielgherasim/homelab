@@ -1,0 +1,19 @@
+# Managed by ansible/roles/guest_hardening — do not edit by hand.
+# Named 00-* so it is read before 50-cloud-init.conf: sshd keeps the first
+# value it finds for each keyword.
+
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+PermitRootLogin no
+PermitEmptyPasswords no
+
+MaxAuthTries {{ guest_hardening_ssh_max_auth_tries }}
+LoginGraceTime {{ guest_hardening_ssh_login_grace_time }}
+
+X11Forwarding no
+AllowAgentForwarding no
+# TCP forwarding is left at the default on purpose: ProxyJump through the
+# vpn01 bastion needs it.
+
+AllowUsers {{ guest_hardening_ssh_allow_users | join(' ') }}

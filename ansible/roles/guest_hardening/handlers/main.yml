@@ -1,0 +1,8 @@
+---
+- name: Reload sshd
+  # Reload keeps established sessions (including this Ansible connection)
+  # alive; a full restart is not needed to pick up new directives.
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded
+  become: true

@@ -4,3 +4,12 @@
 # Reboot cadence stays a human decision; this only enables automatic
 # *installation* of security updates.
 guest_hardening_unattended_reboot: false
+
+# Accounts allowed to log in over SSH. Must include the account Ansible
+# connects with (checked before anything is written) or the role would lock
+# itself out. cloud-init creates `ubuntu` on these guests.
+guest_hardening_ssh_allow_users:
+  - ubuntu
+
+guest_hardening_ssh_max_auth_tries: 3
+guest_hardening_ssh_login_grace_time: 30

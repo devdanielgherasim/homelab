@@ -7,6 +7,7 @@ than one place (Makefile + CI + a hook, for example).
 | Script | Used by | Purpose |
 |---|---|---|
 | `doctor.sh` | `make doctor` | Reports which required tools are present/missing/version-drifted. Installs nothing. |
+| `test-guest-hardening.sh` | CI (`ansible-converge` job), `make test-roles` | Applies the `guest_hardening` role in a throwaway systemd container and checks the effective sshd config, idempotence and the lock-out guard. Needs Docker only. |
 
 Scripts here never touch real infrastructure (Proxmox, a real cluster)
 without explicit human action — see
