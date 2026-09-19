@@ -1,0 +1,89 @@
+# Helm values for Argo CD, chart argo/argo-cd 10.9.2 (Argo CD v3.5.3).
+# The same file is used twice: once by the bootstrap `helm install`, and then by
+# the Argo CD Application in kubernetes/platform/apps/argocd.yaml, so the running
+# instance always matches what is in Git. See README.md in this directory.
+#
+# Every key was checked against `helm show values argo/argo-cd --version 10.9.2`.
+# Nothing secret belongs here: this repository is public.
+
+global:
+  revisionHistoryLimit: 3
+  networkPolicy:
+    # Cilium enforces these. Ingress only is restricted; egress stays open so
+    # Argo CD can reach GitHub, chart repositories and the API server.
+    create: true
+    defaultDenyIngress: false
+
+# Not needed for a single operator without SSO, and each costs memory.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+redis-ha:
+  enabled: false
+
+configs:
+  cm:
+    # The local admin is the only account (no SSO). The password is rotated after
+    # the first login and the initial secret is deleted; see README.md.
+    admin.enabled: true
+    # No shell into pods from the UI.
+    exec.enabled: false
+  params:
+    # Lower parallelism than the defaults: this is a handful of applications on
+    # small nodes, and the repo server can spike when it renders a large chart.
+    controller.status.processors: "10"
+    controller.operation.processors: "5"
+    reposerver.parallelism.limit: "1"
+  rbac:
+    # Deny by default. Only the admin account, which has full rights, can act.
+    policy.default: ""
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  env:
+    # ~80% of the memory limit, so the Go runtime collects before the kernel kills it.
+    - name: GOMEMLIMIT
+      value: 400MiB
+
+server:
+  replicas: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  env:
+    - name: GOMEMLIMIT
+      value: 400MiB
+
+redis:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+# There is no ApplicationSet in use (one app-of-apps root instead), so the
+# controller is scaled to zero. Raise it if a generator is ever needed.
+applicationSet:
+  replicas: 0

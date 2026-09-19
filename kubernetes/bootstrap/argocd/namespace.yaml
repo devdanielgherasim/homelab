@@ -1,0 +1,10 @@
+# The Argo CD namespace, created once at bootstrap. Every Argo CD pod runs under the
+# `restricted` Pod Security level (checked with a server-side dry run of the rendered
+# chart), so no exemption is needed.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

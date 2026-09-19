@@ -1,0 +1,27 @@
+# Helm values for the podinfo demo workload (chart podinfo/podinfo 6.15.0). A tiny web
+# service used to prove the GitOps loop: a change here reaches the cluster only by way
+# of Git, and a manual change to the running objects is reverted.
+#
+# The security context makes it compatible with the `restricted` Pod Security level, so
+# the namespace can enforce it.
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

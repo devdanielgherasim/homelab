@@ -27,6 +27,8 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0011](0011-proxmox-api-token-privileges.md) | Privilege-separated Proxmox API token, scoped to a pool | Accepted |
 | [0012](0012-local-backups.md) | Backups stay on the Proxmox host, and cover only what has state | Accepted |
 | [0013](0013-control-plane-hardening.md) | Control-plane hardening, and what is deliberately left out | Accepted |
+| [0014](0014-gitops-structure.md) | GitOps structure: Argo CD app-of-apps, scoped projects, CNI outside GitOps | Proposed |
+| [0015](0015-loadbalancer-cilium-l2.md) | LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB | Proposed |
 
 New ADRs get the next sequential number and are added to this table.
 

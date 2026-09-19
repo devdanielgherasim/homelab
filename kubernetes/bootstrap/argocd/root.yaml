@@ -1,0 +1,33 @@
+# The root application (app-of-apps). Applied once at bootstrap; from then on Argo CD
+# watches kubernetes/platform/apps/ and creates one Application per file there, so
+# adding a component is adding a file in Git.
+#
+# It lives here, not in the directory it watches, so it cannot manage itself.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  project: bootstrap
+  source:
+    repoURL: https://github.com/devdanielgherasim/homelab.git
+    targetRevision: main
+    path: kubernetes/platform/apps
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

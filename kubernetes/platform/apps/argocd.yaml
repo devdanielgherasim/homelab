@@ -1,0 +1,51 @@
+# Argo CD manages its own installation: the chart and version are pinned here and the
+# values come from the same file that was used for the bootstrap `helm install`, so
+# the running instance and Git cannot drift apart silently.
+#
+# Safeguards for a self-managed controller:
+#   * no resources-finalizer, so deleting this Application never deletes Argo CD;
+#   * prune is off, so a removed template can never delete a running component;
+#   * the pinned chart version changes only through a reviewed commit.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: bootstrap
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.9.2
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/kubernetes/bootstrap/argocd/values.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # Argo CD writes the admin password hash and the server key into this Secret at
+  # runtime; reverting that would log the admin out and reset the password.
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: argocd-secret
+      jsonPointers:
+        - /data
+        - /stringData
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

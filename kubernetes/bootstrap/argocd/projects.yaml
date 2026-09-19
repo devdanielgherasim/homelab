@@ -1,0 +1,70 @@
+# AppProjects limit what each group of Applications may deploy, and where. A
+# project that could target the argocd namespace would give its Applications
+# administrator-level access to Argo CD, so only `bootstrap` may.
+#
+# bootstrap - Argo CD itself and the root app-of-apps. The only project that may
+#             write to the argocd namespace.
+# platform  - shared services (load balancer, gateway, mesh, observability). Any
+#             namespace except argocd, and cluster-scoped resources, because
+#             platform components install CRDs and cluster roles.
+# apps      - workloads. Only the namespaces listed, and no cluster-scoped
+#             resources except Namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: bootstrap
+  namespace: argocd
+spec:
+  description: Argo CD itself and the root application
+  sourceRepos:
+    - https://github.com/devdanielgherasim/homelab.git
+    - https://argoproj.github.io/argo-helm
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  clusterResourceWhitelist:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Shared platform services
+  # Chart repositories are added here as each component lands.
+  sourceRepos:
+    - https://github.com/devdanielgherasim/homelab.git
+    - https://blob.istio.io/istio-release/charts
+    - https://github.com/kubernetes-sigs/gateway-api.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+    # Deny wins over the wildcard above.
+    - server: https://kubernetes.default.svc
+      namespace: "!argocd"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  description: Workloads
+  sourceRepos:
+    - https://github.com/devdanielgherasim/homelab.git
+    - https://stefanprodan.github.io/podinfo
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: demo
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace

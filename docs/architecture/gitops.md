@@ -29,6 +29,24 @@ are the source of truth Argo CD reconciles against — Git, not any AI
 conversation or manual `kubectl` change, is authoritative for cluster
 state (see [`AGENTS.md`](../../AGENTS.md)).
 
+### Structure
+
+```text
+kubernetes/
+├── bootstrap/   # applied by hand once: Argo CD (values, namespace, projects, root app), Cilium
+├── platform/
+│   └── apps/    # one Argo CD Application per file; the root application watches this directory
+└── apps/        # values and manifests of the workloads (kubernetes/apps/<name>/)
+```
+
+A root Application (`kubernetes/bootstrap/argocd/root.yaml`) creates one Application
+per file in `kubernetes/platform/apps/`. Each Application installs an upstream Helm
+chart at a pinned version with its values taken from this repository (multiple
+sources), or points at a directory of plain manifests. Three AppProjects limit what
+each group may deploy and where. Cilium stays bootstrap-managed. The reasoning is in
+[ADR-0014](../adr/0014-gitops-structure.md); the install and verification steps are
+in [`../../kubernetes/bootstrap/argocd/README.md`](../../kubernetes/bootstrap/argocd/README.md).
+
 ## Source of truth boundary
 
 - **In Git:** desired state (manifests, Helm values, Kustomize overlays), ADRs, docs.

@@ -247,6 +247,29 @@ off) or Cluster API, to be evaluated; (6) a small control panel.
   `inventories/production/`. A runbook for adding/removing a worker is written
   after that has been done once (2 -> 3 -> 2).
 
+## Platform build (started 2026-09-20)
+
+Capacity measured 2026-09-20: each worker has about 2.5 GB free (2 vCPU, under 15%
+used); the Proxmox host has about 4.9 GB available. So the platform has roughly 5 GB
+of RAM in total and every component needs an explicit budget. No StorageClass exists.
+Approach: three read-only research agents in parallel (Argo CD; load balancer +
+Gateway API + Istio; observability), then implementation in disjoint directories,
+then one integration pass here. Nothing is applied to the cluster without approval.
+
+- [ ] G1. Argo CD (GitOps): bootstrap install from `kubernetes/bootstrap/argocd/`,
+  root app-of-apps under `kubernetes/platform/`, Cilium stays bootstrap-managed
+  (a CNI managed by the tool that runs on it can lock itself out), CRD-aware
+  kubeconform in CI, ADR, sample app synced from Git, self-heal demonstrated.
+- [ ] G2. Load balancer (MetalLB or Cilium LB IPAM + L2, decided from research; an
+  ADR either way) and the Gateway API CRDs.
+- [ ] G3. Istio + Gateway API gateway, cert-manager with a private CA if needed,
+  a sample app with weighted routing, mTLS, private access only.
+- [ ] G4. Observability (Prometheus + Grafana, Hubble metrics, capacity dashboards
+  for later autoscaling), logs only if they fit in RAM, storage decision without a
+  StorageClass.
+- [ ] G5. Kyverno policies and Trivy operator (if RAM allows), NetworkPolicies
+  default-deny per namespace.
+
 ## Resume notes
 
 Hardening applied 2026-09-19 with the owner's approval (A control plane, B Hubble

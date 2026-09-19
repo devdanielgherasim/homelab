@@ -43,6 +43,7 @@ jobs:
               - 'scripts/test-*.sh'
             kubernetes:
               - 'kubernetes/**'
+              - 'scripts/validate-k8s.sh'
             shell:
               - '**/*.sh'
             docs:
@@ -122,8 +123,8 @@ jobs:
           curl -sSfL -O "${base}/kubeconform-linux-amd64.tar.gz" -O "${base}/CHECKSUMS"
           sha256sum --check --ignore-missing CHECKSUMS
           tar xzf kubeconform-linux-amd64.tar.gz kubeconform
-          # Helm values files are not Kubernetes resources (no `kind`), so they are skipped.
-          find kubernetes -name '*.yaml' -print0 | xargs -0 -r ./kubeconform -strict -summary -ignore-filename-pattern '(^|/)values[^/]*[.]ya?ml$'
+          # Kubernetes 1.37 schemas plus the community CRD schemas (pinned), see the script.
+          KUBECONFORM=./kubeconform scripts/validate-k8s.sh
 
   shell:
     needs: changes

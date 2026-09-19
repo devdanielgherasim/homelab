@@ -55,7 +55,7 @@ validate: lint ## Static validation for changed files (fmt-check + domain valida
 		echo "$$tf" | xargs -r -n1 dirname | sort -u | while read -r d; do (cd "$$d" && tofu fmt -check && tofu init -backend=false -input=false >/dev/null && tofu validate); done; \
 	fi; \
 	if [ -n "$$k8s" ] && command -v kubeconform >/dev/null 2>&1; then \
-		echo "-- kubeconform --"; echo "$$k8s" | xargs -r kubeconform -strict -summary -ignore-filename-pattern '(^|/)values[^/]*[.]ya?ml$$'; \
+		echo "-- kubeconform --"; bash scripts/validate-k8s.sh; \
 	fi; \
 	if [ -n "$$ans" ] && command -v ansible-lint >/dev/null 2>&1; then \
 		echo "-- ansible-lint --"; ANSIBLE_CONFIG=ansible/ansible.cfg ansible-lint; \
