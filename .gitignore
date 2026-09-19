@@ -72,3 +72,8 @@ node_modules/
 # --- Misc ---
 *.log
 .cache/
+
+# --- Local tooling state (never public) ---
+.mcp.json
+.superpowers/
+.ansible/
