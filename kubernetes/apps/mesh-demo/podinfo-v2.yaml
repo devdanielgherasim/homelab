@@ -27,7 +27,9 @@ spec:
       containers:
         - name: podinfo
           image: ghcr.io/stefanprodan/podinfo:6.15.0
-          args:
+          # The image's CMD is ./podinfo; setting only args would replace it.
+          command:
+            - ./podinfo
             - --port=9898
             - --level=info
           env:
