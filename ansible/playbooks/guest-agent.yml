@@ -1,0 +1,14 @@
+---
+# Installs and starts qemu-guest-agent in the four lab VMs. Safe and additive:
+# one package, no configuration change, no restart of anything else.
+#
+# Example:
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/guest-agent.yml --private-key ~/.ssh/homelab_admin_ed25519
+
+- name: Install the QEMU guest agent in the lab VMs
+  hosts: homelab_vms
+  become: true
+  gather_facts: true
+  roles:
+    - qemu_guest_agent

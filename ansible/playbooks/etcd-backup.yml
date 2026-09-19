@@ -1,0 +1,15 @@
+---
+# Installs the daily etcd snapshot job on the control-plane node. Read-only
+# with respect to the cluster: it only reads etcd and the PKI and writes files
+# under /var/backups/etcd. See docs/runbooks/backup-and-restore.md.
+#
+# Example:
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/etcd-backup.yml --private-key ~/.ssh/homelab_admin_ed25519
+
+- name: Schedule verified etcd snapshots on the control plane
+  hosts: k8s_control_plane
+  become: true
+  gather_facts: true
+  roles:
+    - etcd_backup

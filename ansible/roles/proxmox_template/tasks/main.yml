@@ -56,9 +56,11 @@
       changed_when: true
 
     - name: Enable the QEMU guest agent
-      # Ubuntu's official cloud images ship qemu-guest-agent
-      # preinstalled and enabled; this just tells Proxmox to expect it
-      # so `qm agent`/OpenTofu IP-detection works once VMs are cloned.
+      # This only tells Proxmox to expose the agent channel. Ubuntu's cloud
+      # image does NOT include the qemu-guest-agent package (found 2026-09-19:
+      # it was missing from all four VMs), so the guest side is installed by
+      # ansible/roles/qemu_guest_agent. Without it `qm agent` and OpenTofu's
+      # IP detection time out and backups are not file-system consistent.
       ansible.builtin.command:
         cmd: "qm set {{ proxmox_template_vmid }} --agent enabled=1"
       changed_when: true

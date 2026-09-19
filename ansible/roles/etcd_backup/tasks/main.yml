@@ -1,0 +1,117 @@
+---
+# Daily verified etcd snapshot on the control-plane node, driven by a systemd
+# timer, with a matching archive of /etc/kubernetes/pki. See
+# docs/runbooks/backup-and-restore.md for the restore procedure.
+
+- name: Check which etcd version the control plane runs
+  ansible.builtin.command:
+    cmd: grep -m1 'image:' /etc/kubernetes/manifests/etcd.yaml
+  become: true
+  changed_when: false
+  failed_when: false
+  check_mode: false # read-only
+  register: etcd_backup_manifest_image
+  when: etcd_backup_install_binaries | bool
+
+- name: Refuse a tooling version that differs from the running etcd
+  ansible.builtin.assert:
+    that:
+      - etcd_backup_version in etcd_backup_manifest_image.stdout
+    fail_msg: >-
+      etcd_backup_version ({{ etcd_backup_version }}) does not match the etcd
+      static pod ({{ etcd_backup_manifest_image.stdout | trim }}). Snapshot and
+      restore tooling must match the server; update the role defaults.
+    quiet: true
+  when:
+    - etcd_backup_install_binaries | bool
+    - etcd_backup_manifest_image.rc == 0
+
+- name: Install etcdctl and etcdutl at the running etcd's version
+  when: etcd_backup_install_binaries | bool
+  # Under --check the directory is not really created, so the download that
+  # follows cannot succeed; that is a limit of check mode, not a real failure.
+  ignore_errors: "{{ ansible_check_mode }}"
+  block:
+    - name: Create the versioned tool directory
+      ansible.builtin.file:
+        path: "/opt/etcd-v{{ etcd_backup_version }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      become: true
+
+    - name: Download the etcd release (checksum verified)
+      ansible.builtin.get_url:
+        url: "https://github.com/etcd-io/etcd/releases/download/v{{ etcd_backup_version }}/etcd-v{{ etcd_backup_version }}-linux-amd64.tar.gz"
+        dest: "/opt/etcd-v{{ etcd_backup_version }}/etcd.tar.gz"
+        checksum: "sha256:{{ etcd_backup_sha256 }}"
+        owner: root
+        group: root
+        mode: "0644"
+      become: true
+
+    - name: Unpack only etcdctl and etcdutl
+      ansible.builtin.unarchive:
+        src: "/opt/etcd-v{{ etcd_backup_version }}/etcd.tar.gz"
+        dest: "/opt/etcd-v{{ etcd_backup_version }}"
+        remote_src: true
+        extra_opts:
+          - --strip-components=1
+          - --wildcards
+          - "*/etcdctl"
+          - "*/etcdutl"
+        creates: "/opt/etcd-v{{ etcd_backup_version }}/etcdutl"
+      become: true
+
+    - name: Link the tools onto the PATH
+      ansible.builtin.file:
+        src: "/opt/etcd-v{{ etcd_backup_version }}/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        state: link
+      loop:
+        - etcdctl
+        - etcdutl
+      become: true
+
+- name: Create the backup directory (root only)
+  ansible.builtin.file:
+    path: "{{ etcd_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: Install the snapshot script
+  ansible.builtin.template:
+    src: etcd-snapshot.sh.j2
+    dest: /usr/local/sbin/etcd-snapshot
+    owner: root
+    group: root
+    mode: "0750"
+  become: true
+
+- name: Install the systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etcd-snapshot.service
+    - etcd-snapshot.timer
+  become: true
+  notify: Reload systemd for etcd snapshot units
+
+- name: Apply unit changes before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the timer
+  ansible.builtin.systemd:
+    name: etcd-snapshot.timer
+    enabled: true
+    state: started
+  become: true
+  ignore_errors: "{{ ansible_check_mode }}" # the unit is not written under --check

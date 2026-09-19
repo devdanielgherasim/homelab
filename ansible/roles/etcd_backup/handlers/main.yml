@@ -1,0 +1,5 @@
+---
+- name: Reload systemd for etcd snapshot units
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true

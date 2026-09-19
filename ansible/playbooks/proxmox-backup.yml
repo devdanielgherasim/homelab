@@ -1,0 +1,15 @@
+---
+# Creates (or updates) the scheduled vzdump job for the control-plane VM on the
+# Proxmox host. Additive: it defines a schedule and runs nothing itself. See
+# docs/runbooks/backup-and-restore.md for the restore procedure.
+#
+# Example:
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/proxmox-backup.yml --private-key ~/.ssh/homelab_admin_ed25519
+
+- name: Schedule the Proxmox backup of the control-plane VM
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  roles:
+    - proxmox_backup

@@ -9,6 +9,9 @@
 #   guest_hardening  beats a cloud-init drop-in, is idempotent, refuses a lock-out.
 #   tailscale        installs from the signed repo, enables forwarding, is idempotent,
 #                    refuses to run without routes. It never joins a tailnet here.
+#   etcd_backup      installs the units; the snapshot script keeps exactly N copies,
+#                    creates them private, and discards a snapshot that fails
+#                    verification (run against stand-ins for etcdctl/etcdutl).
 #
 # Needs Docker only. Runs the same way locally and in CI.
 set -euo pipefail
@@ -83,7 +86,7 @@ docker exec "$NAME" bash -euc "
   printf 'PasswordAuthentication yes\n' > /etc/ssh/sshd_config.d/50-cloud-init.conf
   systemctl enable --now ssh >/dev/null 2>&1 || systemctl start ssh
   pip install --break-system-packages -q 'ansible-core==${ANSIBLE_CORE_VERSION}'
-  printf '[homelab_vms]\nlocalhost ansible_connection=local ansible_user=ubuntu\n[vpn_gateway]\nlocalhost ansible_connection=local ansible_user=ubuntu\n' > /tmp/inv.ini
+  printf '[homelab_vms]\nlocalhost ansible_connection=local ansible_user=ubuntu\n[vpn_gateway]\nlocalhost ansible_connection=local ansible_user=ubuntu\n[k8s_control_plane]\nlocalhost ansible_connection=local ansible_user=ubuntu\n' > /tmp/inv.ini
 "
 
 # ---------------------------------------------------------------- guest_hardening
@@ -131,4 +134,46 @@ docker exec "$NAME" systemctl is-active --quiet tailscaled \
 expect_refused ts-noroutes "tailscale_advertise_routes is empty" \
   tailscale.yml -e tailscale_join=false -e '{"tailscale_advertise_routes":[]}'
 
-echo "PASS: guest_hardening and tailscale converge, are idempotent and refuse bad input"
+# -------------------------------------------------------------------- etcd_backup
+echo "== etcd_backup"
+etcd_vars=(-e etcd_backup_install_binaries=false -e etcd_backup_keep=3)
+
+expect_ok        etcd-run1 etcd-backup.yml "${etcd_vars[@]}"
+expect_unchanged etcd-run2 etcd-backup.yml "${etcd_vars[@]}"
+
+docker exec "$NAME" systemd-analyze verify /etc/systemd/system/etcd-snapshot.service /etc/systemd/system/etcd-snapshot.timer \
+  || fail "etcd_backup: systemd units do not verify"
+docker exec "$NAME" systemctl is-enabled --quiet etcd-snapshot.timer || fail "etcd_backup: timer not enabled"
+docker exec "$NAME" systemctl is-active --quiet etcd-snapshot.timer || fail "etcd_backup: timer not active"
+
+# Stand-ins for etcdctl/etcdutl and the PKI, so the script's own logic runs for real.
+docker exec "$NAME" bash -euc '
+  mkdir -p /tmp/bk/pki/etcd
+  for f in ca.crt healthcheck-client.crt healthcheck-client.key; do echo x > /tmp/bk/pki/etcd/$f; done
+  printf "#!/bin/sh\nfor a; do last=\$a; done\necho fake-snapshot > \"\$last\"\n" > /tmp/bk/etcdctl
+  printf "#!/bin/sh\nexit 0\n" > /tmp/bk/etcdutl
+  chmod +x /tmp/bk/etcdctl /tmp/bk/etcdutl
+'
+snapshot_env=(-e BACKUP_DIR=/tmp/bk/out -e KEEP=3 -e ETCDCTL=/tmp/bk/etcdctl -e PKI_DIR=/tmp/bk/pki)
+for _ in 1 2 3 4 5; do
+  docker exec "${snapshot_env[@]}" -e ETCDUTL=/tmp/bk/etcdutl "$NAME" /usr/local/sbin/etcd-snapshot >/dev/null \
+    || fail "etcd_backup: snapshot script failed"
+  sleep 1.1 # file names carry a one-second timestamp
+done
+[ "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/etcd-*.db | wc -l')" = "3" ] \
+  || fail "etcd_backup: retention did not keep exactly 3 snapshots"
+[ "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/pki-*.tar.gz | wc -l')" = "3" ] \
+  || fail "etcd_backup: retention did not keep exactly 3 PKI archives"
+[ "$(docker exec "$NAME" stat -c %a "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/etcd-*.db | tail -1')")" = "600" ] \
+  || fail "etcd_backup: snapshot is not private (mode 600)"
+
+newest_before="$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/etcd-*.db | tail -1')"
+if docker exec "${snapshot_env[@]}" -e ETCDUTL=/bin/false "$NAME" /usr/local/sbin/etcd-snapshot >/dev/null 2>&1; then
+  fail "etcd_backup: a snapshot that fails verification was accepted"
+fi
+[ "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/etcd-*.db | tail -1')" = "$newest_before" ] \
+  || fail "etcd_backup: a failed verification still produced a snapshot file"
+[ "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/*.partial 2>/dev/null | wc -l')" = "0" ] \
+  || fail "etcd_backup: a partial file was left behind"
+
+echo "PASS: guest_hardening, tailscale and etcd_backup converge, are idempotent and refuse bad input"

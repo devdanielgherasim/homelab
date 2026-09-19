@@ -34,7 +34,7 @@ resource "proxmox_virtual_environment_vm" "this" {
   }
 
   agent {
-    enabled = true # template has qemu-guest-agent preinstalled — see ansible/roles/proxmox_template/
+    enabled = true # guest side is installed by ansible/roles/qemu_guest_agent, not by the image
   }
 
   operating_system {

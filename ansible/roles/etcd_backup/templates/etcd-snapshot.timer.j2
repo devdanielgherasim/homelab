@@ -1,0 +1,12 @@
+# Managed by ansible/roles/etcd_backup — do not edit by hand.
+[Unit]
+Description=Daily etcd snapshot
+
+[Timer]
+OnCalendar={{ etcd_backup_schedule }}
+# Run a missed snapshot at next boot; the lab is powered off at times.
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

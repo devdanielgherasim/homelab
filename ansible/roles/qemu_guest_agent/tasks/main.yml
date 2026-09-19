@@ -1,0 +1,22 @@
+---
+# The Ubuntu cloud image does not include qemu-guest-agent, even though the VM
+# template enables the agent device. Without it Proxmox cannot read the guest's
+# addresses, cannot freeze file systems for consistent snapshots and backups,
+# and OpenTofu waits for an agent report that never comes.
+
+- name: Install the QEMU guest agent
+  ansible.builtin.apt:
+    name: qemu-guest-agent
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Make sure the agent is running
+  # The unit has no [Install] section (udev starts it when the virtio serial
+  # port appears), so it is started rather than enabled.
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    state: started
+  become: true
+  ignore_errors: "{{ ansible_check_mode }}" # unit does not exist yet under --check

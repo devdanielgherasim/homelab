@@ -1,0 +1,100 @@
+---
+# Idempotent: creates the backup job if missing, updates it if any managed
+# field differs, and does nothing otherwise. Uses `pvesh`, the same CLI the
+# web UI drives, so no extra Python dependency is needed on the host.
+
+- name: Require a storage that accepts backups
+  ansible.builtin.command:
+    cmd: "pvesm status --storage {{ proxmox_backup_storage }} --content backup"
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_backup_storage_check
+
+- name: Fail if the storage does not allow backups
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_storage in proxmox_backup_storage_check.stdout
+    fail_msg: >-
+      Storage '{{ proxmox_backup_storage }}' does not allow content type
+      'backup'. Enable it under Datacenter -> Storage or choose another.
+    quiet: true
+
+- name: Read the existing backup jobs
+  ansible.builtin.command:
+    cmd: pvesh get /cluster/backup --output-format json
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_backup_jobs
+
+- name: Find this job
+  ansible.builtin.set_fact:
+    proxmox_backup_existing: >-
+      {{ proxmox_backup_jobs.stdout | from_json
+         | selectattr('id', 'equalto', proxmox_backup_job_id) | list | first | default({}) }}
+    proxmox_backup_vmid_csv: "{{ proxmox_backup_vmids | map('string') | join(',') }}"
+
+# pvesh returns prune-backups as a mapping ({"keep-last": "3"}), while the same
+# setting is written as a string (keep-last=3). Reduce both to the number.
+- name: Read the retention the job currently has
+  ansible.builtin.set_fact:
+    proxmox_backup_existing_keep: >-
+      {%- set p = proxmox_backup_existing['prune-backups'] | default({}) -%}
+      {{ p['keep-last'] | default('') if p is mapping
+         else (p | string | regex_search('keep-last=([0-9]+)', '\\1') | default('', true)) }}
+
+- name: Create the backup job
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - create
+      - /cluster/backup
+      - --id
+      - "{{ proxmox_backup_job_id }}"
+      - --vmid
+      - "{{ proxmox_backup_vmid_csv }}"
+      - --storage
+      - "{{ proxmox_backup_storage }}"
+      - --schedule
+      - "{{ proxmox_backup_schedule }}"
+      - --mode
+      - "{{ proxmox_backup_mode }}"
+      - --compress
+      - "{{ proxmox_backup_compress }}"
+      - --prune-backups
+      - "keep-last={{ proxmox_backup_keep_last }}"
+      - --enabled
+      - "1"
+  changed_when: true
+  when: proxmox_backup_existing | length == 0
+
+- name: Update the backup job if a managed field differs
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - "/cluster/backup/{{ proxmox_backup_job_id }}"
+      - --vmid
+      - "{{ proxmox_backup_vmid_csv }}"
+      - --storage
+      - "{{ proxmox_backup_storage }}"
+      - --schedule
+      - "{{ proxmox_backup_schedule }}"
+      - --mode
+      - "{{ proxmox_backup_mode }}"
+      - --compress
+      - "{{ proxmox_backup_compress }}"
+      - --prune-backups
+      - "keep-last={{ proxmox_backup_keep_last }}"
+      - --enabled
+      - "1"
+  changed_when: true
+  when:
+    - proxmox_backup_existing | length > 0
+    - >-
+      (proxmox_backup_existing.vmid | string) != proxmox_backup_vmid_csv
+      or proxmox_backup_existing.storage != proxmox_backup_storage
+      or proxmox_backup_existing.schedule != proxmox_backup_schedule
+      or proxmox_backup_existing.mode != proxmox_backup_mode
+      or proxmox_backup_existing.compress != proxmox_backup_compress
+      or (proxmox_backup_existing_keep | string) != (proxmox_backup_keep_last | string)
+      or (proxmox_backup_existing.enabled | default(1) | int) != 1

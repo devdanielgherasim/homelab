@@ -1,0 +1,29 @@
+---
+# Scheduled Proxmox backup (vzdump). The job is a cluster-level object, so it
+# lives in /etc/pve/jobs.cfg and shows up under Datacenter -> Backup in the
+# web UI.
+proxmox_backup_job_id: homelab-daily
+
+# Only the control plane (cp01, VMID 102) is backed up. The workers and vpn01
+# hold no state: they are rebuilt from Git (OpenTofu + Ansible), so a full-disk
+# backup of them would only spend disk. cp01 is different: it is the single
+# control plane, and its etcd snapshots live on its own disk, so an archive in
+# Proxmox storage is what survives the VM being destroyed.
+# Revisit this list when a workload with persistent volumes appears.
+proxmox_backup_vmids: [102]
+
+# Backups stay on the Proxmox host's own disk — an accepted limit for this lab,
+# see docs/adr/0012-local-backups.md. The storage must allow content "backup".
+proxmox_backup_storage: local
+
+# Proxmox calendar syntax, in the host's time zone.
+proxmox_backup_schedule: "03:30"
+
+# "snapshot" keeps the VMs running. It is only file-system consistent when the
+# guest agent runs (see the qemu_guest_agent role); otherwise crash-consistent.
+proxmox_backup_mode: snapshot
+proxmox_backup_compress: zstd
+
+# How many backups per VM to keep. cp01 uses about 4 GB, so a few copies are
+# cheap; check `pvesm status` after the first runs.
+proxmox_backup_keep_last: 3

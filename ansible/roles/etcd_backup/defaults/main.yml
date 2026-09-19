@@ -1,0 +1,22 @@
+---
+# Must match the etcd static pod image on the control plane
+# (registry.k8s.io/etcd:<version>-0 in /etc/kubernetes/manifests/etcd.yaml).
+# etcdctl/etcdutl are downloaded at exactly this version so that snapshot
+# and restore tooling never differs from the server it talks to.
+etcd_backup_version: "3.7.0"
+# Published in the release's SHA256SUMS file.
+etcd_backup_sha256: "b05cb07f5686dab8f9cdab89986b44f0dd24aaf5c627176aff325e21fa56f9f0"
+
+# Snapshots and PKI archives are kept on the control-plane node itself. That is
+# an accepted limit for this lab — see docs/adr/0012-local-backups.md.
+etcd_backup_dir: /var/backups/etcd
+
+# How many snapshots (and PKI archives) to keep.
+etcd_backup_keep: 7
+
+# systemd OnCalendar expression, in the node's time zone (UTC on these guests).
+etcd_backup_schedule: "*-*-* 02:30:00"
+
+# false = install the script and timer only (used by the container test, where
+# there is no etcd to download tooling for).
+etcd_backup_install_binaries: true

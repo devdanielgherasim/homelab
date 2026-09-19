@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Managed by ansible/roles/etcd_backup — do not edit by hand.
+#
+# Takes a verified etcd snapshot plus an archive of the cluster PKI (a restore
+# needs both: the snapshot holds the data, the PKI holds the identity), then
+# prunes old copies. A snapshot that fails verification is discarded, so the
+# newest file in the backup directory is always a usable one.
+#
+# Every path and tool can be overridden through the environment, which is how
+# scripts/test-roles.sh exercises this script with stand-ins.
+set -euo pipefail
+umask 077
+
+BACKUP_DIR="${BACKUP_DIR:-{{ etcd_backup_dir }}}"
+KEEP="${KEEP:-{{ etcd_backup_keep }}}"
+ETCDCTL="${ETCDCTL:-/usr/local/bin/etcdctl}"
+ETCDUTL="${ETCDUTL:-/usr/local/bin/etcdutl}"
+PKI_DIR="${PKI_DIR:-/etc/kubernetes/pki}"
+ENDPOINT="${ENDPOINT:-https://127.0.0.1:2379}"
+
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+snapshot="${BACKUP_DIR}/etcd-${stamp}.db"
+partial="${snapshot}.partial"
+pki_archive="${BACKUP_DIR}/pki-${stamp}.tar.gz"
+
+mkdir -p "$BACKUP_DIR"
+trap 'rm -f -- "$partial"' EXIT
+
+ETCDCTL_API=3 "$ETCDCTL" \
+  --endpoints="$ENDPOINT" \
+  --cacert="${PKI_DIR}/etcd/ca.crt" \
+  --cert="${PKI_DIR}/etcd/healthcheck-client.crt" \
+  --key="${PKI_DIR}/etcd/healthcheck-client.key" \
+  snapshot save "$partial"
+
+# A snapshot that etcdutl cannot read is not a backup.
+"$ETCDUTL" snapshot status "$partial" --write-out=json >/dev/null
+mv -- "$partial" "$snapshot"
+
+tar -C "$(dirname "$PKI_DIR")" -czf "$pki_archive" "$(basename "$PKI_DIR")"
+
+# prune <glob>: keep the newest $KEEP files matching the glob.
+prune() {
+  local old
+  old="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name "$1" -printf '%T@ %p\n' \
+    | sort -rn | tail -n +"$((KEEP + 1))" | cut -d' ' -f2-)"
+  if [ -n "$old" ]; then
+    while IFS= read -r file; do rm -f -- "$file"; done <<<"$old"
+  fi
+}
+prune 'etcd-*.db'
+prune 'pki-*.tar.gz'
+
+echo "etcd snapshot written: $snapshot ($(stat -c %s "$snapshot") bytes), kept newest ${KEEP}"

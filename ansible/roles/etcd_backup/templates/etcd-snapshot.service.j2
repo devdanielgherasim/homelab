@@ -1,0 +1,16 @@
+# Managed by ansible/roles/etcd_backup — do not edit by hand.
+[Unit]
+Description=Take a verified etcd snapshot and archive the cluster PKI
+Documentation=file:///usr/local/sbin/etcd-snapshot
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/etcd-snapshot
+
+# The job only needs to read the PKI and write the backup directory.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths={{ etcd_backup_dir }}
