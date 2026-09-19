@@ -6,8 +6,11 @@ the decision to keep everything on the Proxmox host are in
 
 | What | How | Where | Retention |
 |---|---|---|---|
-| etcd data and cluster PKI | `etcd-snapshot.timer` on `cp01` (`ansible/roles/etcd_backup`) | `/var/backups/etcd` on `cp01`, mode 600 | 7 copies, daily 02:30 UTC |
+| etcd data, cluster PKI and the Secret-encryption key | `etcd-snapshot.timer` on `cp01` (`ansible/roles/etcd_backup`) | `/var/backups/etcd` on `cp01`, mode 600 | 7 copies, daily 02:30 UTC |
 | `cp01` as a whole VM | Proxmox job `homelab-daily` (`ansible/roles/proxmox_backup`) | `local` storage of the Proxmox host | 3 copies, daily 03:30 |
+
+The `pki-*.tar.gz` archive next to each snapshot holds `pki/` and `enc/` (the key
+that encrypts Secrets). A restored snapshot cannot be read without `enc/`.
 
 Workers and `vpn01` are not backed up: they hold no state and are rebuilt from
 Git.

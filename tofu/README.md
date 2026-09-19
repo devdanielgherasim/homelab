@@ -35,7 +35,30 @@ variables — never in a file in this repo. The token comes from
 ```bash
 export PROXMOX_VE_ENDPOINT="https://<your-proxmox-ip>:8006/"
 export PROXMOX_VE_API_TOKEN="opentofu@pve!tofu=<your-token-secret>"
+export SSL_CERT_FILE="$HOME/.config/homelab/pve-root-ca.pem"
 ```
+
+**TLS is verified.** The Proxmox certificate is signed by the cluster's own CA.
+Fetch that public certificate once with
+`ansible-playbook ... playbooks/proxmox-bootstrap.yml --tags tls_ca`, compare its
+fingerprint with the one in the Proxmox UI (Datacenter -> Certificates), and point
+`SSL_CERT_FILE` at it (Linux and WSL; Go on Windows uses the system store instead).
+`proxmox_insecure` defaults to `false`.
+
+**The token is scoped to a pool.** It can only act on VMs in the `homelab` resource
+pool (`var.proxmox_pool`); a new VM must be created with `pool_id` set, which the
+module does. See
+[ADR-0011](../docs/adr/0011-proxmox-api-token-privileges.md).
+
+**Safety switches in the module.** `protection = true` makes Proxmox itself refuse to
+delete a VM or its disks (set it to `false` first when a VM really has to go),
+`on_boot` starts the VMs when the host boots, and `reboot_after_update = false` means
+an apply never reboots a running node by itself. The boot *order* is not managed
+here: changing it needs `Sys.Modify` on `/`, so it is applied by Ansible
+(`playbooks/proxmox-vm-startup.yml`) and the module ignores drift on it.
+
+Always read the plan first (`tofu plan`); an in-place update is expected, a
+replacement of a VM is not.
 
 ## Running from WSL2 against a Windows-mounted repo
 

@@ -49,3 +49,13 @@ settings is recommended and complements `gitleaks` (different detection
 signatures, and push protection blocks *before* the push completes). This
 requires a repository-settings change an agent cannot make — see the
 manual-setup list in the bootstrap report.
+
+## Kubernetes Secrets at rest
+
+Secrets stored in etcd are encrypted with the `secretbox` provider
+([ADR-0013](../adr/0013-control-plane-hardening.md)). The key is generated on the
+control-plane node (`/etc/kubernetes/enc`, root only), never in Git, and is included
+in the etcd backup archive next to the PKI, because a restored snapshot cannot be
+read without it. Both live on the same disk as the snapshot itself (ADR-0012), so
+this protects against reading etcd data files or a stolen snapshot only if the key is
+kept apart. Rotating the key is not exercised yet.

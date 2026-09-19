@@ -26,3 +26,4 @@ Each entry (`docs/troubleshooting/<slug>.md`):
 | [`containerd-cri-disabled-by-package.md`](containerd-cri-disabled-by-package.md) | Kubernetes bootstrap | `containerd.io` ships `disabled_plugins = ["cri"]`; `kubeadm init` fails preflight |
 | [`ansible-derived-private-key-path.md`](ansible-derived-private-key-path.md) | Ansible | A regex-derived key path silently pointed at the `.pub` file |
 | [`qemu-guest-agent-not-installed.md`](qemu-guest-agent-not-installed.md) | Proxmox / guests | Agent channel enabled but package missing: IP timeout on apply and no file-system freeze for snapshots |
+| [`tofu-apply-403-pool-allocate.md`](tofu-apply-403-pool-allocate.md) | Proxmox RBAC / OpenTofu | Narrowed token failed an apply on `Pool.Allocate`; a plan proves reads, not the write paths an apply takes |

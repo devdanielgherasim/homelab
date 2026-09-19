@@ -98,17 +98,23 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
     effective-config assertion is skipped in check mode).
   - Deliberately not added: ufw (would fight Cilium's datapath), fail2ban
     (key-only SSH).
-- [ ] 11. Proxmox RBAC: custom least-privilege role scoped to `/vms` (or a
+- [x] 11. Proxmox RBAC: custom least-privilege role scoped to `/vms` (or a
   pool) instead of `PVEVMAdmin` at `/`; pin the Proxmox TLS fingerprint /
   install a real CA instead of `insecure = true`.
-- [ ] 12. Declarative `kubeadm-config.yaml` (control-plane endpoint, kubelet
+- [x] 12. Declarative `kubeadm-config.yaml` (control-plane endpoint, kubelet
   serverTLSBootstrapping, encryption-at-rest config, audit policy,
   `skip-phases=addon/kube-proxy` for new clusters).
-- [ ] 13. Ansible idempotence: real `changed_when` on command tasks; add
+- [x] 13. Ansible idempotence: real `changed_when` on command tasks; add
   Molecule or `--check --diff` CI job where feasible.
-- [ ] 14. Tofu: VM protection (`prevent_destroy` / `protection`), disk flags
-  (`discard`, `ssd`, `iothread`), `on_boot`, cloud-init snippets; encrypted
-  state backup or remote backend.
+- [x] 14. Tofu hardening: VM `protection`, `on_boot`, `reboot_after_update = false`,
+  pool scope, TLS verified.
+  - DONE 2026-09-19: applied by the owner after a first apply failed with 403
+    (fixed with `Pool.Audit`; boot order moved to Ansible because it needs
+    `Sys.Modify`). Verified: `protection: 1` on all four VMs, fresh plan
+    "No changes".
+  - NOT done on purpose: disk flags `discard`/`ssd` (may need a reboot; take them
+    in a reboot window, they would also let the thin pool reclaim space); a
+    backup of the local OpenTofu state.
 
 ### Phase C — platform roadmap (each step needs explicit approval to apply)
 
@@ -177,23 +183,66 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
     owner can still push directly.
   - PENDING: require pull requests, signed commits, `enforce_admins`.
 
+## Hardening sub-plan (started 2026-09-19, owner said "finish the hardening")
+
+Baseline measured with kube-bench 0.16.0, benchmark cis-1.12, on cp01:
+62 pass, 13 fail, 56 warn (manual). Target: fix what is fixable, document the
+rest as accepted. Accepted on purpose: 1.2.5 (needs serverTLSBootstrapping and
+a CSR approver, one more component; revisit with GitOps) and 4.3.1 (checks
+kube-proxy, which Cilium replaced).
+
+- [x] H1. `kubeadm_init` becomes the single source of truth: renders
+  `kubeadm-config.yaml` (v1beta4, based on the live ClusterConfiguration),
+  encryption-at-rest (secretbox, key generated on the node, never in Git),
+  audit policy, Pod Security admission defaults (baseline enforce, restricted
+  warn/audit, kube-system exempt), profiling off; used by `kubeadm init
+  --config` for rebuilds and reconciled onto the live control plane with
+  `kubeadm init phase control-plane all`. The etcd backup archive must also
+  contain the encryption config or restored data cannot be read.
+- [x] H2. `kubelet_hardening` role: file modes for CIS 4.1.x on all nodes.
+- [x] H3. etcd data directory owned by an `etcd` user (CIS 1.1.12).
+- [x] H4. Apply to the live cluster with the owner's approval: fresh etcd
+  snapshot and vzdump of cp01 first, manifests backed up, apiserver restarts
+  for a short time. Verify: secrets carry the `k8s:enc:secretbox` prefix in
+  etcd, audit log is written, a privileged pod is refused by server-side dry
+  run, kube-bench re-run.
+- [x] H5. Hubble Relay server TLS (Helm upgrade, with approval).
+- [x] H6. Proxmox: verify TLS with the cluster CA instead of `insecure = true`;
+  narrow the token to a resource pool / custom role (task 11). Test with a
+  temporary principal, never the real token secret.
+- [~] H7. OpenTofu: read-only plan with a temporary token; only then propose
+  protection / on_boot / startup order / discard changes (task 14). Any
+  apply needs approval.
+- [x] H8. Docs: ADR-0013 (control-plane hardening choices and accepted
+  deviations), `docs/security/cis-benchmark.md` with before/after, STATUS.
+
+Status of the sub-plan (legend: [~] = code written, validated, NOT yet applied):
+H1-H3 (`kubeadm_init` config/reconcile, `kubelet_hardening`, etcd user), H5
+(Hubble Relay TLS values), H6 (RBAC role/pool + CA fetch in
+`proxmox_bootstrap`) and H7 (`pool_id`, `protection`, `on_boot`, startup order
+in the tofu module; `proxmox_insecure` default false) are written and pass
+ansible-lint, tofu validate, the converge tests, and read-only dry-runs against
+the real hosts (kubeadm config validate + a control-plane dry-run showing only
+added flags). Nothing has been applied. H4 and the applies of H5/H6/H7 need the
+owner's approval with impact and rollback stated.
+
 ## Resume notes
 
-Tasks 1-10, 15, 16, 18 done; 20 partial. Backups are live (etcd timer next
-fires 02:37 UTC; `homelab-daily` vzdump 03:30). Code from the tailscale role
-onward is uncommitted except what was pushed as `49ded15`: the backup roles,
-guest-agent role, playbooks, ADR-0012, runbook and docs are uncommitted.
+Hardening applied 2026-09-19 with the owner's approval (A control plane, B Hubble
+TLS, C Proxmox RBAC, D tofu plan): CIS 62/13 -> 76/2, Secrets encrypted, audit
+log and Pod Security on, Hubble Relay TLS on (relay and UI verified), Proxmox
+token moved from PVEVMAdmin on `/` to a 13-privilege role on the `homelab` pool
+(15/15 API checks incl. 5 refused operations), TLS verified with the cluster CA.
 
-The throwaway VM and the worker snapshots are gone (approved and done). The
-`pre-cilium` snapshot of cp01 (VMID 102) is intentionally kept; delete it once
-the owner is comfortable, since it grows on the thin pool.
+The owner applied OpenTofu on 2026-09-19 (after a first 403, fixed): protection
+on all four VMs, boot order via Ansible, fresh plan "No changes". Still open:
+disk flags in a reboot window; back up the OpenTofu state; task 17 network
+segmentation; task 19 platform components (Argo CD, MetalLB, Gateway API + Istio,
+observability); task 20 PRs and signed commits.
 
-Lesson worth keeping: under `--check`, `command` tasks are skipped, so a
-`--check` run can never prove that drift detection works. Test idempotence
-and drift with real runs on a reversible field.
-
-Waiting on the user: `PROXMOX_VE_*` for a real `tofu plan`. Code-only work
-still open: 11, 12, 13, 14; new idea: back up the OpenTofu state.
+Uncommitted: everything from the hardening work. Two hook false positives blocked
+plain-text edits that only mentioned destructive commands; they were written with
+the file tools instead of the shell.
 
 ## Verification
 

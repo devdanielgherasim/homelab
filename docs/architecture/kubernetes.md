@@ -54,6 +54,13 @@ certificates stay internal; this is not a publicly trusted CA setup.
 read-only root filesystem where possible. Immutable tags/digests preferred
 over `:latest`.
 
+The cluster enforces the `baseline` Pod Security level by default (warning and
+auditing at `restricted`), with `kube-system` exempt; a namespace that needs more
+opts in with a label. Secrets are encrypted at rest and API activity is audited.
+The choices, and what was left out on purpose, are in
+[ADR-0013](../adr/0013-control-plane-hardening.md); the measured result is in
+[`../security/cis-benchmark.md`](../security/cis-benchmark.md).
+
 ## Repository layout for this domain
 
 ```text

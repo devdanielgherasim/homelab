@@ -12,6 +12,7 @@ Find the doc for your task instead of reading everything in `docs/`.
 | Work on Argo CD, delivery pipeline | [`architecture/gitops.md`](architecture/gitops.md) |
 | Work on Prometheus/Grafana/Loki/Tempo | [`architecture/observability.md`](architecture/observability.md) |
 | Understand what secrets/exposure rules apply | [`security/public-repository.md`](security/public-repository.md) |
+| See how hardened the cluster is (CIS benchmark) | [`security/cis-benchmark.md`](security/cis-benchmark.md) |
 | Configure or touch the self-hosted runner | [`security/self-hosted-runners.md`](security/self-hosted-runners.md) |
 | Understand why a decision was made | [`adr/README.md`](adr/README.md) |
 | Diagnose a known failure mode | [`troubleshooting/README.md`](troubleshooting/README.md) |
