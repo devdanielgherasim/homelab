@@ -1,14 +1,24 @@
 extends: default
 
+# Compatible with ansible-lint's own yamllint requirements
+# (https://docs.ansible.com/projects/lint/rules/yaml/) so that one config
+# serves both `yamllint` and `ansible-lint`.
 rules:
   line-length:
-    max: 120
+    max: 160
     level: warning
   document-start: disable
   truthy:
     allowed-values: ["true", "false"]
+    check-keys: false # GitHub Actions uses `on:` as a key
   comments:
     min-spaces-from-content: 1
+  comments-indentation: disable
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
 
 ignore: |
   .terraform/

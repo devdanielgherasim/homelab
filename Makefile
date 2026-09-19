@@ -13,7 +13,7 @@ ALL ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor fmt lint validate security drift changed-files
+.PHONY: help doctor fmt lint validate security drift changed-files test-roles
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -58,7 +58,7 @@ validate: lint ## Static validation for changed files (fmt-check + domain valida
 		echo "-- kubeconform --"; echo "$$k8s" | xargs -r kubeconform -strict -summary; \
 	fi; \
 	if [ -n "$$ans" ] && command -v ansible-lint >/dev/null 2>&1; then \
-		echo "-- ansible-lint --"; ansible-lint; \
+		echo "-- ansible-lint --"; ANSIBLE_CONFIG=ansible/ansible.cfg ansible-lint; \
 	fi; \
 	echo "validate: done"
 
@@ -69,6 +69,9 @@ security: ## Local secret scan + IaC security scan
 	@if command -v trivy >/dev/null 2>&1; then \
 		echo "-- trivy config --"; trivy config --exit-code 0 tofu ansible kubernetes 2>/dev/null || true; \
 	else echo "trivy not installed — see 'make doctor'"; fi
+
+test-roles: ## Converge-test Ansible roles in a throwaway container (needs Docker)
+	@bash scripts/test-guest-hardening.sh
 
 drift: ## Report drift between declared (Git) and actual infra state — non-mutating
 	@if [ -z "$$(find tofu -mindepth 2 -name '*.tf' 2>/dev/null)" ]; then \

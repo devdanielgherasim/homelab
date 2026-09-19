@@ -5,11 +5,9 @@ name: validate
 # credentials. Always runs on GitHub-hosted runners, including for PRs
 # from forks — see docs/security/self-hosted-runners.md.
 #
-# KNOWN LIMITATION: third-party actions below are pinned to version tags,
-# not commit SHAs, pending a verified-SHA pass (see docs/security/public-repository.md
-# and the project's "pin actions to a commit SHA" policy). Track via
-# Dependabot (.github/dependabot.yml) and tighten to SHA pins in a
-# follow-up PR rather than guessing hashes here.
+# Third-party actions are pinned to full commit SHAs (the trailing comment
+# is the tag the SHA was resolved from). Dependabot
+# (.github/dependabot.yml) proposes updates and keeps the comment in sync.
 
 on:
   pull_request:
@@ -33,8 +31,8 @@ jobs:
       shell: ${{ steps.filter.outputs.shell }}
       docs: ${{ steps.filter.outputs.docs }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
           filters: |
@@ -42,6 +40,7 @@ jobs:
               - 'tofu/**'
             ansible:
               - 'ansible/**'
+              - 'scripts/test-*.sh'
             kubernetes:
               - 'kubernetes/**'
             shell:
@@ -54,10 +53,12 @@ jobs:
     if: needs.changes.outputs.tofu == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: opentofu/setup-opentofu@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
       - name: tofu fmt -check
-        run: find tofu -mindepth 1 -maxdepth 1 -type d -exec tofu fmt -check -recursive {} \; || tofu fmt -check -recursive tofu
+        # Single invocation so a formatting diff fails the job. (`find -exec`
+        # always exits 0 regardless of the command's status.)
+        run: tofu fmt -check -recursive -diff tofu
       - name: tofu validate (per module)
         run: |
           set -euo pipefail
@@ -70,32 +71,57 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ansible == 'true'
     runs-on: ubuntu-latest
+    env:
+      # ansible/ansible.cfg sets roles_path relative to itself; without this
+      # the tools run from the repo root and cannot resolve any role.
+      ANSIBLE_CONFIG: ${{ github.workspace }}/ansible/ansible.cfg
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
       - run: pip install "ansible-core==2.21.*" "ansible-lint==26.8.*"
-      - name: ansible-lint
-        run: ansible-lint || true # tightened once real playbooks exist
+      - name: ansible-lint (production profile)
+        run: ansible-lint
       - name: syntax-check
         run: |
-          find ansible/playbooks -name '*.yml' -print0 2>/dev/null | xargs -0 -r -n1 ansible-playbook --syntax-check
+          set -euo pipefail
+          for playbook in ansible/playbooks/*.yml; do
+            echo "== $playbook =="
+            ansible-playbook --syntax-check "$playbook"
+          done
+
+  ansible-converge:
+    # Applies roles inside a throwaway systemd container — never against real
+    # hosts — and checks the resulting state and idempotence.
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Converge test (guest_hardening)
+        run: scripts/test-guest-hardening.sh
 
   kubernetes:
     needs: changes
     if: needs.changes.outputs.kubernetes == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: yamllint
-        uses: ibiqlik/action-yamllint@v3
+        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3
         with:
           config_file: .yamllint.yaml
           file_or_dir: kubernetes
       - name: kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.8.0 # keep in sync with mise.toml
         run: |
-          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          set -euo pipefail
+          base="https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}"
+          curl -sSfL -O "${base}/kubeconform-linux-amd64.tar.gz" -O "${base}/CHECKSUMS"
+          sha256sum --check --ignore-missing CHECKSUMS
+          tar xzf kubeconform-linux-amd64.tar.gz kubeconform
           find kubernetes -name '*.yaml' -print0 | xargs -0 -r ./kubeconform -strict -summary
 
   shell:
@@ -103,16 +129,16 @@ jobs:
     if: needs.changes.outputs.shell == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: ludeeus/action-shellcheck@2.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
 
   docs:
     needs: changes
     if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: DavidAnson/markdownlint-cli2-action@v24
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24
         with:
           config: .markdownlint.jsonc
           globs: '**/*.md'

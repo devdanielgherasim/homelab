@@ -17,4 +17,5 @@ body:
   - type: markdown
     attributes:
       value: |
-        Do **not** include real credentials, tokens, or private network details in this report — this repository is public. See `docs/security/public-repository.md`.
+        Do **not** include real credentials, tokens, or private network details in this report — this repository is public.
+        See `docs/security/public-repository.md`.

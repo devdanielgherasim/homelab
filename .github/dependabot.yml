@@ -1,7 +1,22 @@
 version: 2
 updates:
+  # Action pins are full commit SHAs; Dependabot opens PRs that bump the SHA
+  # and the trailing version comment together.
   - package-ecosystem: "github-actions"
     directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # OpenTofu provider pins (versions.tf + .terraform.lock.hcl).
+  - package-ecosystem: "terraform"
+    directories:
+      - "/tofu/environments/homelab"
+      - "/tofu/modules/proxmox-vm"
     schedule:
       interval: "weekly"
     commit-message:

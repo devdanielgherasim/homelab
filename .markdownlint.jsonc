@@ -5,5 +5,7 @@
   "MD013": false,   // line length — prose wraps naturally, not enforced
   "MD033": false,   // inline HTML — used for details/diagrams occasionally
   "MD041": false,   // first line doesn't have to be a top-level heading (frontmatter etc.)
+  "MD060": false,   // table column alignment style — cosmetic, not structural
+  "MD025": { "front_matter_title": "" }, // plans/*.md carry a frontmatter `title:` next to their H1
   "MD024": { "siblings_only": true } // allow duplicate headings across different sections
 }
