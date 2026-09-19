@@ -61,6 +61,7 @@ for the full sequence. In short:
 | `make fmt` | Format changed files (`tofu fmt`, etc.) |
 | `make lint` | Lint changed files by domain |
 | `make validate` | Static validation for changed files (see `AGENTS.md`) |
+| `make test-roles` | Converge-test Ansible roles in a throwaway Docker container (never touches real hosts) |
 | `make security` | Local secret scan + IaC security scan |
 
 Infrastructure-changing targets (`make infra-plan`, `make cluster`, etc.)

@@ -13,8 +13,10 @@ If two sources disagree, the higher one is correct; fix the lower one.
 A production-style Kubernetes homelab (Proxmox → kubeadm → Cilium → Istio →
 Argo CD) built for DevOps/Platform Engineering learning and as a portfolio
 reference. See `docs/architecture/overview.md` for the full design.
-**This repo is presently at the bootstrap stage: no infrastructure has been
-provisioned.** Check `STATUS.md` before claiming anything is running.
+**The Proxmox host, four VMs and a 3-node kubeadm cluster exist; the platform
+layer (CNI, ingress, GitOps, observability) is not built yet.** `STATUS.md`
+is the only authority on what is running — check it before claiming anything
+works.
 
 ## Repository map — read the doc, not the whole tree
 

@@ -72,7 +72,7 @@ cross-role default dependency) between `kubeadm_prereqs` and
       (only if missing)" task a no-op everywhere (the package had already
       dropped a file), so containerd's real defaults never got a chance
       to apply. Fixed: a new idempotent task removes the
-      `disabled_plugins = ` line entirely (`lineinfile: state: absent`),
+      `disabled_plugins =` line entirely (`lineinfile: state: absent`),
       notifying the same `Restart containerd` handler. Also fixed, same
       pass: two bare (deprecated, unprefixed) fact-variable usages
       (`ansible_swaptotal_mb`, `ansible_architecture`,

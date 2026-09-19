@@ -18,7 +18,7 @@ cloning this repository. Everything after it is.
 
 ## Responsibility model (where each layer of config actually lives)
 
-```
+```text
 Manual Proxmox ISO installation
         │
         └──▶ this document (docs/proxmox/installation.md)
@@ -110,7 +110,7 @@ not been run against the real host.
 
 ## Reproducibility / disaster-recovery objective
 
-```
+```text
 fresh Proxmox installation (this document)
         │
         ▼

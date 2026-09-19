@@ -28,7 +28,7 @@ of key-based login from the controller before touching `sshd_config`.
 Firewall rules stage writes rules with `policy_in: ACCEPT` first (nothing
 blocked) — only the separate `firewall_enforce` tag flips to `DROP`. This
 was cross-checked against Proxmox's own documented anti-lockout behavior
-(https://pve.proxmox.com/wiki/Firewall) rather than assumed.
+(<https://pve.proxmox.com/wiki/Firewall>) rather than assumed.
 
 ## Environment findings worth keeping
 

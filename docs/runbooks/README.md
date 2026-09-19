@@ -18,7 +18,7 @@ Create one with `.claude/skills/write-runbook/SKILL.md`.
 
 ## Recovery objective this repository is built around
 
-```
+```text
 fresh Proxmox installation
         │
         ▼

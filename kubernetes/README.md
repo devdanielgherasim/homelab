@@ -6,7 +6,7 @@ and [`../docs/architecture/gitops.md`](../docs/architecture/gitops.md).
 
 ## Layout (created as content lands, not pre-scaffolded)
 
-```
+```text
 kubernetes/
 ├── bootstrap/   # one-time: installs Argo CD itself (not GitOps-managed, by definition)
 ├── platform/    # Cilium, MetalLB, Istio/Gateway API, cert-manager, Kyverno, observability

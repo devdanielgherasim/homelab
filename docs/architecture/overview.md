@@ -99,16 +99,16 @@ hardware SPOF — see [`infrastructure.md`](infrastructure.md#backup-recovery-an
 
 ## 6. Implementation roadmap
 
-| Phase | Outcome |
-|---|---|
-| 1 — Foundation | Install Proxmox, configure management networking, patch host, enable firewall, create base Ubuntu template. |
-| 2 — Secure remote access | Create `vpn01`, configure Tailscale/subnet routing, validate no management service is WAN-reachable. |
-| 3 — Kubernetes bootstrap | Create `cp01`/`worker01`/`worker02`; install containerd, kubeadm, kubelet, kubectl; bootstrap cluster. |
-| 4 — Cluster networking | Install Cilium and Hubble; validate pod-to-pod, DNS, NetworkPolicy behavior. |
-| 5 — Service exposure | Install MetalLB, Gateway API CRDs, Istio; publish a private sample app through an Istio Gateway. |
-| 6 — GitOps | Install Argo CD; move platform config and sample apps to declarative repositories. |
-| 7 — Security controls | Add SOPS+age, Kyverno, Trivy; harden SSH and workload security contexts. |
-| 8 — Observability | Deploy Prometheus/Grafana/Loki/Tempo with small resource limits and short retention. |
-| 9 — Automation | Packer-based image builds, automated DR testing (later addition). |
+| Phase | Outcome | State |
+|---|---|---|
+| 1 — Foundation | Install Proxmox, configure management networking, patch host, enable firewall, create base Ubuntu template. | Done |
+| 2 — Secure remote access | Create `vpn01`, configure Tailscale/subnet routing, validate no management service is WAN-reachable. | Partial — `vpn01` exists and is hardened; Tailscale not configured |
+| 3 — Kubernetes bootstrap | Create `cp01`/`worker01`/`worker02`; install containerd, kubeadm, kubelet, kubectl; bootstrap cluster. | Done — nodes `NotReady` until a CNI is installed |
+| 4 — Cluster networking | Install Cilium and Hubble; validate pod-to-pod, DNS, NetworkPolicy behavior. | Next |
+| 5 — Service exposure | Install MetalLB, Gateway API CRDs, Istio; publish a private sample app through an Istio Gateway. | Planned |
+| 6 — GitOps | Install Argo CD; move platform config and sample apps to declarative repositories. | Planned |
+| 7 — Security controls | Add SOPS+age, Kyverno, Trivy; harden SSH and workload security contexts. | Planned |
+| 8 — Observability | Deploy Prometheus/Grafana/Loki/Tempo with small resource limits and short retention. | Planned |
+| 9 — Automation | Packer-based image builds, automated DR testing (later addition). | Planned |
 
 Current phase: see [`STATUS.md`](../../STATUS.md).

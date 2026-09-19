@@ -49,7 +49,7 @@ policy in [`../../AGENTS.md`](../../AGENTS.md).
 
 ## Repository layout for this domain
 
-```
+```text
 tofu/          # Proxmox VM provisioning
 ├── modules/   # reusable OpenTofu modules
 └── environments/
@@ -60,8 +60,10 @@ ansible/       # guest OS + Kubernetes prerequisites
 └── roles/
 ```
 
-Both directories currently hold only a `README.md` describing ownership —
-see [`STATUS.md`](../../STATUS.md) for build status.
+Both directories are implemented and applied against the real host — see
+[`STATUS.md`](../../STATUS.md) for per-component state and
+[`../../tofu/README.md`](../../tofu/README.md) /
+[`../../ansible/README.md`](../../ansible/README.md) for usage.
 
 ## Backup, recovery, and failure testing
 

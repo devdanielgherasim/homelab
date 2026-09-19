@@ -53,11 +53,13 @@ over `:latest`.
 
 ## Repository layout for this domain
 
-```
+```text
 kubernetes/
 ├── bootstrap/   # cluster bootstrap manifests (CNI, CRDs, core add-ons)
 ├── platform/    # Argo CD, Kyverno, cert-manager, observability stack
 └── apps/        # sample / workload applications, managed via Argo CD
 ```
 
-Currently holds only a `README.md` — see [`STATUS.md`](../../STATUS.md).
+The cluster itself is bootstrapped by Ansible (`ansible/roles/kubeadm_*`),
+not by manifests. `kubernetes/` stays empty until the first GitOps-managed
+component lands — see [`STATUS.md`](../../STATUS.md).

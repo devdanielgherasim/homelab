@@ -36,8 +36,11 @@ Any workflow referencing `@master` or an affected tag during the ~12-hour
 window had its runner's secrets exfiltrated. This repo's
 `security.yml` used `aquasecurity/trivy-action@master` until this was
 caught during local tool bootstrap on 2026-09-15 and corrected to the
-verified-clean `@v0.35.0`. Full SHA pinning (not just avoiding `@master`)
-remains the tracked follow-up — see `validate.yml`'s known-limitation note.
+verified-clean `@v0.35.0`. All actions in `validate.yml` and `security.yml`
+are now pinned to full commit SHAs (the trailing comment records the tag each
+SHA was resolved from), and Dependabot proposes updates. A separate
+`topology-guard` job in `security.yml` rejects real LAN addressing in tracked
+files, which gitleaks does not detect.
 
 ## GitHub-native protections (manual setup, not automatable from here)
 

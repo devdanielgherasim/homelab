@@ -27,6 +27,14 @@ live in a local file excluded by `.gitignore` (`local/`).
 Final subnets must be validated against the actual home LAN before
 implementation to avoid overlap — done locally, not in this document.
 
+## Current state versus this design
+
+Not yet implemented: all four VMs currently share one flat network with the
+household LAN, and Tailscale is not configured. The reasoning and the exit
+condition are recorded in
+[ADR-0009](../adr/0009-flat-network-until-vpn.md); the live deviations are
+listed in [`STATUS.md`](../../STATUS.md#known-deviations-from-the-target-design).
+
 ## Trust boundaries
 
 ```mermaid

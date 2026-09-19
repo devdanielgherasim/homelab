@@ -1,6 +1,7 @@
 # Project Status
 
-Last updated: 2026-09-16 (Kubernetes cluster bootstrapped, deployed and verified).
+Last updated: 2026-09-19. Cluster state re-verified live over SSH on
+2026-09-19 (`kubectl get nodes`, `kubectl get pods -A`).
 
 State legend: **PLANNED** (designed, not built) · **IMPLEMENTED** (code/config
 exists, statically validated) · **VALIDATED** (tested against a real or
@@ -8,62 +9,75 @@ representative environment) · **DEPLOYED** (running in the actual homelab).
 
 ## Current focus
 
-Phase 1 (Foundation) and Phase 2 (Kubernetes bootstrap) are done: Proxmox
-host bootstrapped, Ubuntu 24.04 template built, all 4 VMs (`vpn01`,
-`cp01`, `worker01`, `worker02`) created and hardened, and a real 3-node
-Kubernetes cluster (`cp01` + 2 workers) initialized and verified. Moving
-into cluster networking (Cilium).
+Phases 1 and 3 of the roadmap are done: Proxmox is bootstrapped, the Ubuntu
+24.04 template is built, four VMs (`vpn01`, `cp01`, `worker01`, `worker02`)
+are provisioned and hardened, and a 3-node upstream Kubernetes cluster is
+initialized. The nodes are `NotReady` and CoreDNS is `Pending` because no CNI
+is installed yet. Phase 4 (Cilium + Hubble) is next. The current
+work item is a repository-quality pass — see
+[`plans/2026-09-19-professionalize-repo.md`](plans/2026-09-19-professionalize-repo.md).
+
+The roadmap and its numbering live in one place:
+[`docs/architecture/overview.md`](docs/architecture/overview.md#6-implementation-roadmap).
 
 ## Component status
 
-| Component | State | Notes |
+| Component | State | Evidence / notes |
 |---|---|---|
-| Repository structure / docs / CI | IMPLEMENTED | This bootstrap. |
-| Architecture design | PLANNED | `docs/architecture/`, ported from prior design doc. |
-| Proxmox host | DEPLOYED | Physically installed (Proxmox VE 9.2), under Ansible-managed configuration, now hosting 4 provisioned VMs (see below). |
-| Proxmox bootstrap (network check, API token, SSH key, firewall) | DEPLOYED | `ansible/roles/proxmox_bootstrap/`, all 6 stages run against `pve01` by the user and verified: dedicated OpenTofu API token created, admin SSH key added, firewall rules applied, SSH password auth disabled — confirmed by a direct key-only SSH test after lockdown. One real bug found and fixed mid-rollout: `template` can't write directly to `/etc/pve` (pmxcfs, non-POSIX — worked around with stage-to-`/tmp`-then-`cp`); a fragile `regex_replace`-derived private-key path silently pointed at the `.pub` file instead (replaced with an explicit variable). See `plans/2026-09-15-proxmox-bootstrap-role.md`. |
-| Proxmox VM template (Ubuntu 24.04 cloud-init, VMID 9000) | DEPLOYED | `ansible/roles/proxmox_template/` run against `pve01`; `qm config 9000` confirmed complete (`template: 1`, disk + cloud-init drive attached, agent enabled). |
-| `vpn01` (Tailscale gateway) | DEPLOYED | VMID 101, `192.168.1.50`. Cloud-init `status: done`, hardened (see below), SSH verified with the admin key. Tailscale itself not yet configured — VM exists, gateway role not yet set up. |
-| `cp01` | DEPLOYED | VMID 102, `192.168.1.51`. Cloud-init `status: done`, hardened, Kubernetes control plane initialized (see below). |
-| `worker01` / `worker02` | DEPLOYED | VMIDs 103/104, `192.168.1.52`/`.53`. Cloud-init `status: done` on both, hardened, joined to the cluster (see below). |
-| Guest OS hardening (SSH defense-in-depth, unattended-upgrades) | DEPLOYED | `ansible/roles/guest_hardening/` run against all 4 VMs — `0 failed`, `4 changed` each. Spot-verified on `vpn01`: `PasswordAuthentication no` active, sshd restarted and reachable, `unattended-upgrades` installed. No automatic reboot (deliberate default). |
-| OpenTofu Proxmox provisioning | DEPLOYED | `tofu apply` run against `pve01` — `Apply complete! Resources: 4 added, 0 changed, 0 destroyed.` All 4 VMs verified reachable (ping + SSH + `cloud-init status`). Non-fatal QEMU-agent IP-report timeout warning during apply, confirmed cosmetic (SSH access unaffected). Three real Proxmox RBAC gaps found and fixed during rollout — `PVEVMAdmin` alone isn't enough for a clone: also needed `PVEDatastoreUser` on `/storage/local-lvm` (`Datastore.AllocateSpace`) and `PVESDNUser` on `/sdn/zones/localnetwork` (`SDN.Use`, a PVE 9-specific check), each granted to both the user and the token (API tokens with `--privsep 1` need ACLs on the token principal, not just the user — the two are intersected, not unioned). See `ansible/roles/proxmox_bootstrap/tasks/api_token.yml` and `plans/2026-09-15-vm-provisioning.md`. |
-| Ansible node configuration | DEPLOYED | `ansible/` has `proxmox_bootstrap`, `proxmox_template`, `guest_hardening`, `kubeadm_prereqs`/`kubeadm_init`/`kubeadm_join` — all deployed and verified. |
-| Kubernetes bootstrap (kubeadm) | DEPLOYED | `playbooks/k8s-bootstrap.yml` run against the real hosts (2026-09-16) — 0 failed on all 3 nodes across both runs. `kubectl get nodes` confirmed: `cp01` (control-plane), `worker01`, `worker02`, all `v1.37.0`, `containerd://2.3.5`. All `NotReady` — expected, no CNI yet (next milestone). One real bug found and fixed mid-rollout: the `containerd.io` apt package ships `disabled_plugins = ["cri"]` in its default config, which silently no-op'd the role's "generate default config if missing" step (the package had already dropped a file) and made `kubeadm init` fail with `unknown service runtime.v1.RuntimeService` on the first attempt. Root-caused via direct SSH on all 3 nodes, fixed with an idempotent `lineinfile: state: absent` task. See `plans/2026-09-16-kubeadm-bootstrap.md`. |
-| Cilium / Hubble | PLANNED | — |
+| Repository structure, docs, ADRs | IMPLEMENTED | ADR set in `docs/adr/`. |
+| CI (`validate`, `security`) | IMPLEMENTED | GitHub-hosted runners only. `validate` was red until 2026-09-19 (see plan); fixes are local and unpushed, so check the badge in the README for current state. Includes an `ansible-converge` job that applies roles in a throwaway container. |
+| Proxmox host (VE 9.2) | DEPLOYED | Physically installed, configured by Ansible. |
+| Proxmox bootstrap: network check, API token, SSH key, firewall, key-only SSH | DEPLOYED | `ansible/roles/proxmox_bootstrap/`. All six stages run against the host; key-only SSH confirmed from a fresh session after lockdown. |
+| Ubuntu 24.04 cloud-init template (VMID 9000) | DEPLOYED | `ansible/roles/proxmox_template/`. `qm config 9000` shows `template: 1`, disk and cloud-init drive attached, agent enabled. |
+| OpenTofu VM provisioning | DEPLOYED | `Apply complete! Resources: 4 added, 0 changed, 0 destroyed.` All four VMs reachable (ping, SSH, `cloud-init status: done`). |
+| `vpn01` (Tailscale gateway) | DEPLOYED (VM only) | VM exists and is hardened. **Tailscale is not configured yet**; it does not act as a gateway. |
+| `cp01`, `worker01`, `worker02` | DEPLOYED | Cloud-init done, hardened, joined to the cluster. |
+| Guest hardening (SSH, unattended upgrades) | DEPLOYED (first version); drop-in rewrite IMPLEMENTED | `ansible/roles/guest_hardening/`. First version ran on all four VMs (`0 failed`, no automatic reboot by design). The role was since rewritten to use an `sshd_config.d/00-hardening.conf` drop-in verified with `sshd -T`; it passes a container converge test (`scripts/test-guest-hardening.sh`: beats a cloud-init override, idempotent, lock-out guard) but has **not been re-applied to the VMs yet**. |
+| Kubernetes bootstrap (kubeadm, containerd) | DEPLOYED | `v1.37.0`, `containerd://2.3.5`. Live check 2026-09-19: three nodes present, all `NotReady`; control-plane static pods `Running`; `kube-proxy` still present. |
+| Cilium / Hubble | PLANNED | Next milestone. |
 | MetalLB | PLANNED | — |
 | Istio + Gateway API | PLANNED | — |
 | Argo CD | PLANNED | — |
-| Kyverno / Trivy runtime scanning | PLANNED | Trivy config-scan already runs in CI on IaC. |
-| SOPS + age | PLANNED | Blocked on public-repo threat-model review (ADR pending). |
+| Kyverno / Trivy runtime scanning | PLANNED | Trivy config scan already runs in CI on IaC. |
+| SOPS + age | PLANNED | Blocked on the public-repo threat-model ADR. |
 | Prometheus / Grafana / Loki / Tempo | PLANNED | — |
-| Self-hosted GitHub Actions runner | PLANNED | Trust boundary designed (`docs/security/self-hosted-runners.md`); no runner configured. |
+| Backups (Proxmox `vzdump`, etcd snapshots) | PLANNED | Not configured. Until they exist the lab is recoverable only by rebuilding from Git. |
+| Self-hosted GitHub Actions runner | PLANNED | Trust boundary designed in `docs/security/self-hosted-runners.md`; no runner exists. |
+
+Incidents found and fixed during rollout are written up in
+[`docs/troubleshooting/`](docs/troubleshooting/).
+
+## Known deviations from the target design
+
+Stated openly so nobody mistakes the target architecture for the current one.
+
+| Area | Target (in `docs/architecture/`) | Today |
+|---|---|---|
+| Network segmentation | Separate management, node and load-balancer networks | All VMs share one flat network on `vmbr0` with the household LAN |
+| Management access | VPN-only (ADR-0008) | Proxmox UI, SSH and the Kubernetes API are reachable from the LAN; Tailscale not configured |
+| Pod networking | Cilium with kube-proxy replacement | No CNI; default `kube-proxy` still deployed |
+| Proxmox API RBAC | Least privilege | Token has `PVEVMAdmin` at `/` plus scoped storage and SDN roles |
+| Proxmox API TLS | Verified certificate | Provider runs with `insecure = true` for the self-signed certificate |
+| Availability | Learning-grade | Single physical host, single control-plane node |
+| Recovery | Documented and tested restore | No backups configured, no restore runbook yet |
 
 ## Blocked
 
-- SOPS + age adoption — needs its threat-model ADR before use.
-- Self-hosted runner — needs `runner01` VM to exist first (depends on Phase 1 provisioning).
-
-## Roadmap
-
-See `docs/architecture/overview.md` §Implementation Roadmap for the full
-9-phase build plan (Foundation → Remote access → Kubernetes bootstrap →
-Cluster networking → Service exposure → GitOps → Security controls →
-Observability → Automation).
+- SOPS + age adoption needs its threat-model ADR before use.
+- Self-hosted runner needs a `runner01` VM, which does not exist yet.
 
 ## Next milestone
 
-Phase 1 — Foundation: **done**. Phase 2 — Kubernetes bootstrap: **done**
-(2026-09-16). Proxmox bootstrapped, template built, all 4 VMs deployed and
-guest-hardened, 3-node Kubernetes cluster initialized and verified
-(`v1.37.0`, all nodes `NotReady` pending CNI).
+Phase 4 — Cluster networking:
 
-Phase 3 — Cluster networking, next:
+1. Remove the `kube-proxy` DaemonSet, install Cilium and Hubble, and confirm
+   the nodes turn `Ready` (see `docs/architecture/kubernetes.md`).
+2. Run the Cilium connectivity test and record the result.
 
-1. Install Cilium + Hubble (nodes go `Ready` once CNI is up) — see
-   `docs/architecture/kubernetes.md`.
-2. `vpn01`: install and configure Tailscale, advertise the
-   `192.168.1.0/24` subnet — see `docs/architecture/networking.md`. Not
-   blocking step 1 (LAN access already works for building/testing).
+In parallel, Phase 2 — Secure remote access: install and configure Tailscale
+on `vpn01` and advertise the node network (see
+`docs/architecture/networking.md`). Not blocking phase 4.
 
-Tracked in `plans/`.
+Anything that changes the running infrastructure follows the
+destructive-action policy in [`AGENTS.md`](AGENTS.md). Work is tracked in
+[`plans/`](plans/).

@@ -16,7 +16,7 @@ for sizing/context.
 
 ## Layout
 
-```
+```text
 ansible/
 ├── ansible.cfg     # roles_path etc. — see "Running from WSL2" below
 ├── inventories/

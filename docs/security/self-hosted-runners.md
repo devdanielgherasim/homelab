@@ -60,7 +60,7 @@ manually dispatched, explicitly authorized workflow may target
 
 Conceptual labels, assigned per runner capability, not applied broadly:
 
-```
+```text
 self-hosted
 linux
 homelab

@@ -17,7 +17,7 @@ from a summary of the chat).
 
 For a cold-start ChatGPT conversation about this project, paste:
 
-```
+```text
 Production-style Kubernetes homelab on a single Proxmox host (~16GB RAM):
 vpn01 (Tailscale gateway), cp01 (control plane), worker01/worker02.
 Upstream Kubernetes via kubeadm+containerd, Cilium CNI, Istio+Gateway API,

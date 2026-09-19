@@ -13,7 +13,7 @@ Do not open a public GitHub issue for:
 - a vulnerability in the automation that could expose the homelab's
   management plane
 
-Instead, email **adriangherasim1@gmail.com** with details. You'll get an
+Instead, email **<contact@danielgherasim.com>** with details. You'll get an
 acknowledgment and a fix or rotation timeline.
 
 ## If a real secret is ever committed to this repository

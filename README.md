@@ -1,12 +1,33 @@
 # homelab
 
+[![validate](https://github.com/devdanielgherasim/homelab/actions/workflows/validate.yml/badge.svg)](https://github.com/devdanielgherasim/homelab/actions/workflows/validate.yml)
+[![security](https://github.com/devdanielgherasim/homelab/actions/workflows/security.yml/badge.svg)](https://github.com/devdanielgherasim/homelab/actions/workflows/security.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A production-style Kubernetes homelab, built on a single Proxmox host, as a
 DevOps / Platform Engineering learning project and portfolio reference.
+Everything is declared in Git: Proxmox host configuration and VM provisioning
+are code, and the cluster is bootstrapped by Ansible.
 
-> **Status: repository bootstrap complete. No infrastructure is
-> provisioned yet.** See [`STATUS.md`](STATUS.md) for the honest,
-> component-by-component breakdown — this README describes the target
-> architecture, not what's currently running.
+> **Status: infrastructure layer deployed, platform layer in progress.** The
+> Proxmox host, four hardened VMs and a 3-node upstream Kubernetes cluster
+> are running; the CNI (Cilium), ingress, GitOps and observability are next.
+> [`STATUS.md`](STATUS.md) is the authoritative, component-by-component
+> record — the diagram below is the **target** architecture.
+
+## What is built today
+
+| Layer | State | Where |
+|---|---|---|
+| Proxmox VE host: firewall, key-only SSH, least-privilege API token | Deployed | [`ansible/roles/proxmox_bootstrap`](ansible/roles/proxmox_bootstrap) |
+| Ubuntu 24.04 cloud-init template | Deployed | [`ansible/roles/proxmox_template`](ansible/roles/proxmox_template) |
+| 4 VMs (`vpn01`, `cp01`, `worker01`, `worker02`) | Deployed | [`tofu/`](tofu) |
+| Guest hardening (SSH, unattended upgrades) | Deployed | [`ansible/roles/guest_hardening`](ansible/roles/guest_hardening) |
+| Kubernetes control plane + 2 workers (kubeadm, containerd) | Deployed — nodes `NotReady` until the CNI lands | [`ansible/roles/kubeadm_*`](ansible/roles) |
+| Cilium, Tailscale, MetalLB, Istio, Argo CD, Kyverno, observability | Planned | [`STATUS.md`](STATUS.md) |
+
+Real incidents hit and fixed along the way are written up in
+[`docs/troubleshooting/`](docs/troubleshooting/).
 
 ## Why this exists
 
@@ -16,7 +37,7 @@ networking/service mesh, GitOps delivery, observability, and security —
 on real (if small) hardware, at zero recurring cost, with everything
 reproducible from this Git repository.
 
-## Architecture
+## Target architecture
 
 ```mermaid
 flowchart TB
@@ -63,7 +84,7 @@ Rationale for each major choice is recorded as an ADR — see
 
 ## Repository structure
 
-```
+```text
 ├── AGENTS.md              # normative rules for any AI agent working here
 ├── CLAUDE.md               # Claude Code-specific routing on top of AGENTS.md
 ├── STATUS.md                # what's PLANNED / IMPLEMENTED / VALIDATED / DEPLOYED
@@ -95,16 +116,18 @@ make doctor         # reports what's present/missing — installs nothing
 make validate         # change-aware static validation
 ```
 
-No infrastructure step exists yet to run — see
-[`docs/proxmox/installation.md`](docs/proxmox/installation.md) for the
-current manual starting point and the planned recovery sequence.
+Operating against real infrastructure needs a private inventory and
+credentials that are never committed — see
+[`docs/proxmox/installation.md`](docs/proxmox/installation.md) for the manual
+starting point and the responsibility model, and
+[`ansible/README.md`](ansible/README.md) / [`tofu/README.md`](tofu/README.md)
+for the run order.
 
 ## Current status
 
-See [`STATUS.md`](STATUS.md) for the full table. Short version: the
-**repository and its AI/CI tooling are bootstrapped**; **Proxmox VE is
-installed** on the physical host at installer defaults; **nothing beyond
-that has been provisioned**.
+See [`STATUS.md`](STATUS.md) for the full table and the known deviations
+from the target design (for example: the VMs currently share one flat network,
+and the VPN gateway is not configured yet).
 
 ## Roadmap
 

@@ -9,7 +9,7 @@ host-level configuration — that's Ansible).
 
 ## Layout
 
-```
+```text
 tofu/
 ├── modules/
 │   └── proxmox-vm/          # reusable: one VM cloned from the cloud-init template

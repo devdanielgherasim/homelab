@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SessionStart hook. Emits a short, cheap status brief — not project
 // history, not a doc dump. Keeps this repo's "public by default" and
-// "no infra provisioned yet" facts visible without re-reading files.
+// "STATUS.md is the source of truth" facts visible without re-reading files.
 
 import { spawnSync } from "node:child_process";
 
@@ -17,7 +17,7 @@ const dirtyCount = dirty ? dirty.split("\n").filter(Boolean).length : 0;
 const lines = [
   `homelab repo — branch: ${branch}, ${dirtyCount} uncommitted change(s).`,
   "Public-by-default: nothing sensitive gets committed — see AGENTS.md.",
-  "No infrastructure is provisioned yet — check STATUS.md before claiming anything runs.",
+  "STATUS.md is the source of truth for what is actually deployed — check it before claiming anything runs.",
 ];
 
 console.log(lines.join("\n"));

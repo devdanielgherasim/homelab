@@ -23,7 +23,7 @@ don't invent a broader scope yourself.
 
 ## Output shape
 
-```
+```text
 PASS: <tool> (<n> files)
 FAIL: <tool> — <file>:<line>: <one-line reason>
 SKIP: <tool> — not installed (see scripts/doctor.sh)
