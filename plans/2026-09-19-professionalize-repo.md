@@ -226,6 +226,27 @@ the real hosts (kubeadm config validate + a control-plane dry-run showing only
 added flags). Nothing has been applied. H4 and the applies of H5/H6/H7 need the
 owner's approval with impact and rollback stated.
 
+## Scaling roadmap (owner's goal, 2026-09-20)
+
+Goal: more workers, including two Hyper-V VMs on the owner's Windows PC, and an
+Azure-like way to scale by hand or automatically, with things to look at.
+Owner's PC: 32 GB RAM, Ryzen 7 5700G, on only while working; prefers Hyper-V.
+Order: (1) `for_each` worker pool + generated inventory [in progress];
+(2) observability and Argo CD; (3) Hyper-V workers with labels and taints (the PC
+is not always on, so nothing critical may depend on them); (4) HPA/KEDA on a demo
+app; (5) node autoscaling, preferably a "warm pool" (pre-created VMs powered on and
+off) or Cluster API, to be evaluated; (6) a small control panel.
+
+- [~] S1. `workers` map + `for_each` + `moved` blocks; `nodes` output;
+  `tofu_inventory.py`; Ansible roles derive pool VMIDs and boot order from the
+  inventory. Code done and validated: a read-only plan shows 0 add / 0 change /
+  0 destroy and only the two state moves; the dynamic inventory matches the static
+  one (groups, addresses, derived values, `changed=0`). NOT applied: the state
+  move and the new outputs need one apply (state only) with the owner's approval;
+  then switch the local `hosts.yml` to the Proxmox host only and point Ansible at
+  `inventories/production/`. A runbook for adding/removing a worker is written
+  after that has been done once (2 -> 3 -> 2).
+
 ## Resume notes
 
 Hardening applied 2026-09-19 with the owner's approval (A control plane, B Hubble
