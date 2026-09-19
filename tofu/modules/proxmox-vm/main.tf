@@ -8,6 +8,23 @@ resource "proxmox_virtual_environment_vm" "this" {
   vm_id     = var.vmid
   node_name = var.node_name
   tags      = var.tags
+  pool_id   = var.pool_id
+
+  protection = var.protection
+  on_boot    = var.on_boot
+
+  # Never let an apply reboot a running node on its own. A change that needs a
+  # reboot is applied to the VM configuration and takes effect at the next
+  # reboot, which is then a deliberate, scheduled action.
+  reboot_after_update = false
+
+  # Boot order (the `startup` attribute) is deliberately not managed here: Proxmox
+  # requires Sys.Modify on `/` to change it, which is far broader than this
+  # token should have. It is a host setting and is applied by Ansible
+  # (roles/proxmox_vm_startup); OpenTofu must not undo it.
+  lifecycle {
+    ignore_changes = [startup]
+  }
 
   clone {
     vm_id = var.template_vmid

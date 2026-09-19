@@ -1,0 +1,28 @@
+---
+# Idempotent: reads each VM's current `startup` setting and only changes it when
+# it differs. Runs on the Proxmox host as root.
+
+- name: Read the current startup setting of each VM
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; qm config {{ item.key }} | sed -n 's/^startup: //p'"
+    executable: /bin/bash
+  loop: "{{ proxmox_vm_startup_orders | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_vm_startup_current
+
+- name: Set the startup order where it differs
+  ansible.builtin.command:
+    argv:
+      - qm
+      - set
+      - "{{ item.item.key }}"
+      - --startup
+      - "{{ item.item.value }}"
+  loop: "{{ proxmox_vm_startup_current.results }}"
+  loop_control:
+    label: "VM {{ item.item.key }}: '{{ item.stdout | trim }}' -> '{{ item.item.value }}'"
+  changed_when: true
+  when: (item.stdout | trim) != (item.item.value | string)

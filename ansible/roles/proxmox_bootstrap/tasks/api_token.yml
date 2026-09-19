@@ -1,35 +1,22 @@
 ---
-# Additive, idempotent, no lockout risk. Creates a dedicated, least-
-# privilege PVE user + API token for OpenTofu — never root, never your
-# interactive login. Uses the `pveum` CLI directly on the host rather than
-# a community.general Proxmox module, to avoid needing proxmoxer/requests
-# on the controller for a one-time bootstrap step.
+# Additive, idempotent, no lockout risk. Creates a dedicated PVE user + API
+# token for OpenTofu — never root, never your interactive login — and gives it
+# only what a VM clone needs, only on the lab's own resource pool (see rbac.yml).
 #
 # The token secret is shown by Proxmox exactly once, at creation. This
 # playbook does not write it to disk or to Git anywhere — it's printed to
 # your terminal (no_log on the creating task keeps it out of any saved
 # Ansible log) and it is YOUR responsibility to store it immediately in
-# GitHub Actions Secrets / a local secrets manager, per
-# docs/security/public-repository.md. If you lose it, delete the token
-# and re-run this tag to issue a new one — there is no way to retrieve an
-# existing token's secret again.
-#
-# Permissions span THREE separate Proxmox ACL namespaces for a VM clone
-# to actually succeed — none alone is sufficient, each confirmed via a
-# real 403 during rollout (2026-09-15), not assumed upfront:
-#   1. /                          PVEVMAdmin       — VM.Clone, VM.Config.*, VM.Allocate, etc.
-#   2. /storage/<datastore_id>    PVEDatastoreUser  — Datastore.AllocateSpace (PVEVMAdmin doesn't include it)
-#   3. /sdn/zones/<zone>          PVESDNUser        — SDN.Use (PVE 9's SDN layer checks this even for vmbr0)
-# Each is granted to BOTH the user and the token (see the privsep note on
-# the "Grant...to the TOKEN" tasks below) — granting only the user leaves
-# the token, which is what OpenTofu actually authenticates as, with zero
-# effective permissions.
+# a local secrets manager, per docs/security/public-repository.md. If you lose
+# it, delete the token and re-run this tag to issue a new one — there is no way
+# to retrieve an existing token's secret again.
 
 - name: Check whether the OpenTofu PVE user already exists
   ansible.builtin.command:
     cmd: "pveum user list --output-format json"
   register: proxmox_bootstrap_pve_users
   changed_when: false
+  check_mode: false # read-only
 
 - name: Create OpenTofu PVE user (if missing)
   ansible.builtin.command:
@@ -41,20 +28,17 @@
     (proxmox_bootstrap_pve_users.stdout | from_json | map(attribute='userid') | list)
   changed_when: true
 
-- name: Grant least-privilege role on / to the OpenTofu user
-  ansible.builtin.command:
-    cmd: >
-      pveum acl modify / --users {{ proxmox_bootstrap_opentofu_pve_user }}
-      --roles {{ proxmox_bootstrap_opentofu_pve_role }}
-  changed_when: true
-
 - name: Check whether the OpenTofu API token already exists
   ansible.builtin.command:
     cmd: "pveum user token list {{ proxmox_bootstrap_opentofu_pve_user }} --output-format json"
   register: proxmox_bootstrap_pve_tokens
   changed_when: false
+  check_mode: false # read-only
 
 - name: Create OpenTofu API token (shown once — save it immediately)
+  # --privsep 1: the token's permissions are the INTERSECTION of the user's
+  # ACLs and the token's own ACLs, so rbac.yml grants every permission to both
+  # (see docs/troubleshooting/proxmox-api-token-403-privsep.md).
   ansible.builtin.command:
     cmd: >
       pveum user token add {{ proxmox_bootstrap_opentofu_pve_user }}
@@ -66,58 +50,8 @@
     proxmox_bootstrap_opentofu_pve_tokenid not in
     (proxmox_bootstrap_pve_tokens.stdout | from_json | map(attribute='tokenid') | list)
 
-- name: Grant the same role to the TOKEN itself, not just the user
-  # --privsep 1 means the token's effective permissions are the
-  # INTERSECTION of the user's ACLs and the token's own ACLs — granting
-  # the role to the user alone (the task above) leaves the token with
-  # zero effective permissions, which surfaces later as a confusing
-  # 403 "Permission check failed" from OpenTofu, not from anything here.
-  # Idempotent: re-running `pveum acl modify` with the same role is a
-  # no-op if already granted.
-  ansible.builtin.command:
-    cmd: >
-      pveum acl modify / -token '{{ proxmox_bootstrap_opentofu_pve_user }}!{{ proxmox_bootstrap_opentofu_pve_tokenid }}'
-      -role {{ proxmox_bootstrap_opentofu_pve_role }}
-  changed_when: true
-
-- name: Grant datastore role on the target datastore to the user
-  # PVEVMAdmin (above) does not include Datastore.AllocateSpace — cloning
-  # a VM needs it separately, scoped to the one datastore actually used
-  # (least privilege, not granted at / for the whole storage tree).
-  ansible.builtin.command:
-    cmd: >
-      pveum acl modify /storage/{{ proxmox_bootstrap_datastore_id }}
-      --users {{ proxmox_bootstrap_opentofu_pve_user }}
-      --roles {{ proxmox_bootstrap_opentofu_datastore_role }}
-  changed_when: true
-
-- name: Grant datastore role on the target datastore to the token
-  ansible.builtin.command:
-    cmd: >
-      pveum acl modify /storage/{{ proxmox_bootstrap_datastore_id }}
-      -token '{{ proxmox_bootstrap_opentofu_pve_user }}!{{ proxmox_bootstrap_opentofu_pve_tokenid }}'
-      -role {{ proxmox_bootstrap_opentofu_datastore_role }}
-  changed_when: true
-
-- name: Grant SDN role on the network zone to the user
-  # Proxmox VE 9's SDN layer requires SDN.Use even for the default
-  # Linux bridge (vmbr0 lives in the built-in "localnetwork" zone) —
-  # neither PVEVMAdmin nor PVEDatastoreUser cover it, confirmed via a
-  # real 403 during rollout.
-  ansible.builtin.command:
-    cmd: >
-      pveum acl modify /sdn/zones/{{ proxmox_bootstrap_sdn_zone }}
-      --users {{ proxmox_bootstrap_opentofu_pve_user }}
-      --roles {{ proxmox_bootstrap_opentofu_sdn_role }}
-  changed_when: true
-
-- name: Grant SDN role on the network zone to the token
-  ansible.builtin.command:
-    cmd: >
-      pveum acl modify /sdn/zones/{{ proxmox_bootstrap_sdn_zone }}
-      -token '{{ proxmox_bootstrap_opentofu_pve_user }}!{{ proxmox_bootstrap_opentofu_pve_tokenid }}'
-      -role {{ proxmox_bootstrap_opentofu_sdn_role }}
-  changed_when: true
+- name: Grant the OpenTofu user and token only what they need, on the lab pool
+  ansible.builtin.import_tasks: rbac.yml
 
 # noqa: no-handler — this deliberately isn't a handler: it must run
 # immediately, in-order, right after the token is created (a handler runs
@@ -128,6 +62,5 @@
     msg: "{{ proxmox_bootstrap_pve_token_create.stdout }}"
   when: proxmox_bootstrap_pve_token_create is changed
   # deliberately NOT no_log on this one task — you need to see it once;
-  # store it in GitHub Actions Secrets or a local secrets manager
-  # immediately, per docs/security/public-repository.md, then close this
-  # terminal.
+  # store it in a local secrets manager immediately, per
+  # docs/security/public-repository.md, then close this terminal.

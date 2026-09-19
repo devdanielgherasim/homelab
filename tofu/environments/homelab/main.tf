@@ -8,6 +8,8 @@ module "vpn01" {
   name      = "vpn01"
   vmid      = 101
   node_name = var.proxmox_node_name
+  pool_id   = var.proxmox_pool
+
 
   cores     = 1
   memory    = 1024 # 512MB-1GB range per infrastructure.md; 1024 chosen as a clean value in range
@@ -27,6 +29,7 @@ module "cp01" {
   name      = "cp01"
   vmid      = 102
   node_name = var.proxmox_node_name
+  pool_id   = var.proxmox_pool
 
   cores     = 2
   memory    = 3072 # 2.5-3GB range per infrastructure.md
@@ -46,6 +49,7 @@ module "worker01" {
   name      = "worker01"
   vmid      = 103
   node_name = var.proxmox_node_name
+  pool_id   = var.proxmox_pool
 
   cores     = 2
   memory    = 3584 # 3-3.5GB range per infrastructure.md
@@ -65,6 +69,7 @@ module "worker02" {
   name      = "worker02"
   vmid      = 104
   node_name = var.proxmox_node_name
+  pool_id   = var.proxmox_pool
 
   cores     = 2
   memory    = 3584

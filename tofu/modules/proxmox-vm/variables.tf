@@ -78,3 +78,21 @@ variable "tags" {
   type        = list(string)
   default     = []
 }
+
+variable "pool_id" {
+  description = "Proxmox resource pool the VM belongs to. OpenTofu's token is scoped to this pool (see ansible/roles/proxmox_bootstrap/tasks/rbac.yml), so a VM outside it cannot be managed. Null = no pool."
+  type        = string
+  default     = null
+}
+
+variable "protection" {
+  description = "Proxmox protection flag: while true, Proxmox refuses to delete the VM or its disks, which turns an accidental destroy into an error. Set it to false first when a VM really has to go."
+  type        = bool
+  default     = true
+}
+
+variable "on_boot" {
+  description = "Start the VM automatically when the Proxmox host boots (the lab is powered on and off)."
+  type        = bool
+  default     = true
+}

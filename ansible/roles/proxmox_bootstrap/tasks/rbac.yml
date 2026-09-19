@@ -1,0 +1,162 @@
+---
+# Least-privilege access for OpenTofu.
+#
+#   * A custom role with only the privileges a clone-and-configure workflow
+#     needs. It leaves out backup, console, migration, snapshots and the guest
+#     agent's file and command privileges (VM.GuestAgent.Unrestricted lets the
+#     holder run commands inside a VM).
+#   * A resource pool holding the lab's VMs and the template. The role is
+#     granted on the pool, not on `/`, so the token has no power over anything
+#     outside it.
+#   * The storage and SDN roles that a clone also needs, on the one datastore
+#     and zone actually used.
+#
+# Every grant goes to BOTH the user and the token (privilege separation makes
+# the effective permission the intersection of the two).
+#
+# Idempotent: each step first reads what exists and only changes what differs.
+
+- name: Read the existing roles, pools and ACLs
+  ansible.builtin.command:
+    cmd: "{{ item.cmd }}"
+  loop:
+    - { name: roles, cmd: "pveum role list --output-format json" }
+    - { name: pools, cmd: "pvesh get /pools --output-format json" }
+    - { name: acls, cmd: "pveum acl list --output-format json" }
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_bootstrap_rbac_state
+
+- name: Work out what is missing
+  ansible.builtin.set_fact:
+    proxmox_bootstrap_rbac_roles: "{{ proxmox_bootstrap_rbac_state.results[0].stdout | from_json }}"
+    proxmox_bootstrap_rbac_pools: "{{ proxmox_bootstrap_rbac_state.results[1].stdout | from_json }}"
+    proxmox_bootstrap_rbac_acls: "{{ proxmox_bootstrap_rbac_state.results[2].stdout | from_json }}"
+    proxmox_bootstrap_token_id: "{{ proxmox_bootstrap_opentofu_pve_user }}!{{ proxmox_bootstrap_opentofu_pve_tokenid }}"
+
+- name: Create or update the custom role
+  # `pveum role add` for a new role, `pveum role modify` when the privileges
+  # differ. Privileges are compared as sets, so their order does not matter.
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - role
+      - "{{ 'modify' if proxmox_bootstrap_opentofu_role in (proxmox_bootstrap_rbac_roles | map(attribute='roleid') | list) else 'add' }}"
+      - "{{ proxmox_bootstrap_opentofu_role }}"
+      - --privs
+      - "{{ proxmox_bootstrap_opentofu_role_privs | join(',') }}"
+  changed_when: true
+  when: >-
+    proxmox_bootstrap_opentofu_role not in (proxmox_bootstrap_rbac_roles | map(attribute='roleid') | list)
+    or (
+      (proxmox_bootstrap_rbac_roles | selectattr('roleid', 'equalto', proxmox_bootstrap_opentofu_role) | first).privs.split(',') | sort
+    ) != (proxmox_bootstrap_opentofu_role_privs | sort)
+
+- name: Create the resource pool
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - pool
+      - add
+      - "{{ proxmox_bootstrap_pool }}"
+      - --comment
+      - "Homelab VMs and template — the only scope OpenTofu may act on"
+  changed_when: true
+  when: proxmox_bootstrap_pool not in (proxmox_bootstrap_rbac_pools | map(attribute='poolid') | list)
+
+- name: Read the pool's current members
+  ansible.builtin.command:
+    cmd: "pvesh get /pools/{{ proxmox_bootstrap_pool }} --output-format json"
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_bootstrap_pool_state
+  failed_when: false
+
+- name: Work out which VMs still need to join the pool
+  # The pool may not exist yet (first run, or --check), in which case pvesh
+  # prints nothing and every VM is missing.
+  ansible.builtin.set_fact:
+    proxmox_bootstrap_pool_info: >-
+      {{ (proxmox_bootstrap_pool_state.stdout | from_json)
+         if (proxmox_bootstrap_pool_state.stdout | default('') | trim | length > 0) else {} }}
+
+- name: List the VMs missing from the pool
+  ansible.builtin.set_fact:
+    proxmox_bootstrap_pool_missing: >-
+      {{ proxmox_bootstrap_pool_vmids | map('string') | list
+         | difference(
+             (proxmox_bootstrap_pool_info.members | default([]))
+             | selectattr('vmid', 'defined') | map(attribute='vmid') | map('string') | list) }}
+
+- name: Add the lab VMs and the template to the pool
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - "/pools/{{ proxmox_bootstrap_pool }}"
+      - --vms
+      - "{{ proxmox_bootstrap_pool_missing | join(',') }}"
+      - --allow-move
+      - "1"
+  changed_when: true
+  when: proxmox_bootstrap_pool_missing | length > 0
+
+- name: Grant the roles to the user and to the token
+  # Skips a grant that is already present (path, principal and role all match).
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - acl
+      - modify
+      - "{{ item.0.path }}"
+      - "{{ '--users' if item.1 == 'user' else '--tokens' }}"
+      - "{{ proxmox_bootstrap_opentofu_pve_user if item.1 == 'user' else proxmox_bootstrap_token_id }}"
+      - --roles
+      - "{{ item.0.role }}"
+  # item.0 is the grant (path + role), item.1 is who receives it.
+  loop: >-
+    {{ [
+         {'path': '/pool/' ~ proxmox_bootstrap_pool, 'role': proxmox_bootstrap_opentofu_role},
+         {'path': '/storage/' ~ proxmox_bootstrap_datastore_id, 'role': proxmox_bootstrap_opentofu_datastore_role},
+         {'path': '/sdn/zones/' ~ proxmox_bootstrap_sdn_zone, 'role': proxmox_bootstrap_opentofu_sdn_role}
+       ] | product(['user', 'token']) | list }}
+  loop_control:
+    label: "{{ item.1 }} {{ item.0.role }} on {{ item.0.path }}"
+  changed_when: true
+  when: >-
+    (proxmox_bootstrap_rbac_acls
+     | selectattr('path', 'equalto', item.0.path)
+     | selectattr('roleid', 'equalto', item.0.role)
+     | selectattr('type', 'equalto', item.1)
+     | selectattr('ugid', 'equalto', proxmox_bootstrap_opentofu_pve_user if item.1 == 'user' else proxmox_bootstrap_token_id)
+     | list | length) == 0
+
+- name: Remove the old broad grant on the whole tree
+  # Only after the narrower grants above are in place and verified. PVEVMAdmin
+  # on `/` gave the token 23 privileges on everything, including running
+  # commands inside any VM through the guest agent.
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - acl
+      - delete
+      - /
+      - "{{ '--users' if item == 'user' else '--tokens' }}"
+      - "{{ proxmox_bootstrap_opentofu_pve_user if item == 'user' else proxmox_bootstrap_token_id }}"
+      - --roles
+      - PVEVMAdmin
+  loop:
+    - user
+    - token
+  changed_when: true
+  when:
+    - proxmox_bootstrap_remove_root_acl | bool
+    - >-
+      (proxmox_bootstrap_rbac_acls
+       | selectattr('path', 'equalto', '/')
+       | selectattr('roleid', 'equalto', 'PVEVMAdmin')
+       | selectattr('type', 'equalto', item)
+       | selectattr('ugid', 'equalto', proxmox_bootstrap_opentofu_pve_user if item == 'user' else proxmox_bootstrap_token_id)
+       | list | length) > 0

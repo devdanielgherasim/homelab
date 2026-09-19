@@ -23,12 +23,14 @@ proxmox_bootstrap_firewall_allowed_mgmt_cidrs:
 # user you log in as interactively.
 proxmox_bootstrap_opentofu_pve_user: "opentofu@pve"
 proxmox_bootstrap_opentofu_pve_tokenid: "tofu"
-# PVEVMAdmin (or a custom role you define) scoped to VM lifecycle only —
-# not Administrator/PVEAdmin. Adjust to the least privilege your OpenTofu
-# module actually needs once it exists.
-proxmox_bootstrap_opentofu_pve_role: "PVEVMAdmin"
-# PVEVMAdmin does not include Datastore.AllocateSpace (separate Proxmox
-# permission namespace) — needed to actually clone a VM's disk. Keep
+# The OpenTofu role, pool and privileges have defaults in
+# roles/proxmox_bootstrap/defaults/main.yml: a custom role (HomelabTofu) with
+# only what a clone needs, granted on a resource pool (homelab), not on `/`.
+# Override them here only if you know why. After the narrower grants have been
+# verified, set this true once to remove the old PVEVMAdmin grant on `/`:
+# proxmox_bootstrap_remove_root_acl: true
+# Datastore.AllocateSpace lives in a separate Proxmox permission namespace and
+# is needed to actually clone a VM's disk. Keep
 # datastore_id in sync with tofu/modules/proxmox-vm/'s datastore_id default.
 proxmox_bootstrap_datastore_id: "local-lvm"
 proxmox_bootstrap_opentofu_datastore_role: "PVEDatastoreUser"

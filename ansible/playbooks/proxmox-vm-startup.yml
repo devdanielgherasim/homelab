@@ -1,0 +1,15 @@
+---
+# Sets the boot order of the lab VMs on the Proxmox host. Additive and
+# idempotent; it changes a VM's configuration only (no restart). See
+# roles/proxmox_vm_startup/defaults/main.yml for the order and why it lives here.
+#
+# Example:
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/proxmox-vm-startup.yml --private-key ~/.ssh/homelab_admin_ed25519
+
+- name: Set the boot order of the lab VMs
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  roles:
+    - proxmox_vm_startup

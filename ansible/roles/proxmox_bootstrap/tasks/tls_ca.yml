@@ -1,0 +1,32 @@
+---
+# Read-only and additive. Copies the Proxmox cluster's root CA certificate (a
+# PUBLIC certificate) to the machine running Ansible, so that OpenTofu can verify
+# the API's TLS certificate instead of running with `insecure = true`.
+#
+# The web certificate is signed by this CA, and its subject alternative names
+# include the host's address and name, so the chain verifies as it is — no
+# external certificate authority is needed. The CA is stored outside the
+# repository; point the provider at it with SSL_CERT_FILE (Linux/WSL; Go on
+# Windows uses the system store instead).
+
+- name: Fetch the cluster root CA certificate
+  ansible.builtin.fetch:
+    src: /etc/pve/pve-root-ca.pem
+    dest: "{{ proxmox_bootstrap_ca_local_path }}"
+    flat: true
+  register: proxmox_bootstrap_ca_fetch
+
+- name: Read its SHA-256 fingerprint
+  ansible.builtin.command:
+    cmd: openssl x509 -in /etc/pve/pve-root-ca.pem -noout -fingerprint -sha256
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_bootstrap_ca_fingerprint
+
+- name: Show where it went and how to check it
+  ansible.builtin.debug:
+    msg:
+      - "Root CA saved to {{ proxmox_bootstrap_ca_local_path }}"
+      - "{{ proxmox_bootstrap_ca_fingerprint.stdout }}"
+      - "Compare that fingerprint with Datacenter -> Certificates in the Proxmox UI before trusting it."
+      - "Use it with: export SSL_CERT_FILE={{ proxmox_bootstrap_ca_local_path }} (and proxmox_insecure = false)."

@@ -30,3 +30,7 @@
 - name: Stage 6 — disable SSH password auth
   ansible.builtin.import_tasks: ssh_lockdown.yml
   tags: [ssh_lockdown, never]
+
+- name: Stage 7 — fetch the cluster CA so TLS can be verified (read-only)
+  ansible.builtin.import_tasks: tls_ca.yml
+  tags: [tls_ca]

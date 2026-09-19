@@ -5,9 +5,20 @@ variable "proxmox_node_name" {
 }
 
 variable "proxmox_insecure" {
-  description = "Skip TLS cert verification — true for Proxmox's default self-signed cert. Set false if you've installed a real certificate."
+  description = <<-EOT
+    Skip TLS certificate verification. Leave false: Proxmox's certificate is
+    signed by the cluster's own CA, so it verifies once that CA is trusted.
+    Fetch it with `ansible-playbook ... proxmox-bootstrap.yml --tags tls_ca`
+    and run OpenTofu with SSL_CERT_FILE pointing at it (Linux/WSL).
+  EOT
   type        = bool
-  default     = true
+  default     = false
+}
+
+variable "proxmox_pool" {
+  description = "Resource pool holding the lab VMs. OpenTofu's API token is scoped to it."
+  type        = string
+  default     = "homelab"
 }
 
 variable "ssh_public_keys" {

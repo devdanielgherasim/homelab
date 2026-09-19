@@ -6,12 +6,35 @@ proxmox_bootstrap_expected_mgmt_cidr: "CHANGE_ME"
 proxmox_bootstrap_firewall_allowed_mgmt_cidrs: []
 proxmox_bootstrap_opentofu_pve_user: "opentofu@pve"
 proxmox_bootstrap_opentofu_pve_tokenid: "tofu"
-proxmox_bootstrap_opentofu_pve_role: "PVEVMAdmin"
-# PVEVMAdmin does NOT include Datastore.AllocateSpace (a separate
-# permission namespace, documented Proxmox gap — confirmed against the
-# Proxmox forum, not assumed) — PVEDatastoreUser on the datastore actually
-# used by tofu/modules/proxmox-vm/ (its datastore_id default) covers it.
-# Keep these two in sync if either changes.
+# Least privilege for OpenTofu (see tasks/rbac.yml): a custom role with only what
+# a clone-and-configure workflow needs, granted on a resource pool that holds
+# the lab's VMs and the template — not on the whole tree. The role deliberately
+# leaves out backup, console, migration, snapshots and the guest agent's file
+# and command privileges.
+proxmox_bootstrap_opentofu_role: "HomelabTofu"
+proxmox_bootstrap_opentofu_role_privs:
+  - VM.Allocate
+  - VM.Audit
+  - VM.Clone
+  - VM.Config.CDROM
+  - VM.Config.CPU
+  - VM.Config.Cloudinit
+  - VM.Config.Disk
+  - VM.Config.HWType
+  - VM.Config.Memory
+  - VM.Config.Network
+  - VM.Config.Options
+  - VM.GuestAgent.Audit
+  - VM.PowerMgmt
+  # Read-only: lets the provider see which pool a VM is in. Without it the pool
+  # looks unset, and the provider then tries to (re)add every VM to the pool,
+  # which needs the write privilege Pool.Allocate.
+  - Pool.Audit
+proxmox_bootstrap_pool: "homelab"
+proxmox_bootstrap_pool_vmids: [101, 102, 103, 104, 9000]
+# The old grant of PVEVMAdmin on `/`. Leave false until the narrower grants have
+# been tested, then set true once to remove it.
+proxmox_bootstrap_remove_root_acl: false
 proxmox_bootstrap_datastore_id: "local-lvm"
 proxmox_bootstrap_opentofu_datastore_role: "PVEDatastoreUser"
 # Proxmox VE 9's SDN layer checks SDN.Use even for the default Linux
@@ -21,6 +44,9 @@ proxmox_bootstrap_opentofu_datastore_role: "PVEDatastoreUser"
 # bridge default if that ever changes from vmbr0/localnetwork.
 proxmox_bootstrap_sdn_zone: "localnetwork"
 proxmox_bootstrap_opentofu_sdn_role: "PVESDNUser"
+# Where the Proxmox cluster CA (a public certificate) is saved on the machine
+# running Ansible. Outside the repository.
+proxmox_bootstrap_ca_local_path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab/pve-root-ca.pem"
 proxmox_bootstrap_admin_ssh_pubkey_path: "~/.ssh/homelab_admin_ed25519.pub"
 # Explicit, not derived from the pubkey path via regex — a regex_replace
 # on a Jinja expression inside a YAML block scalar is fragile (backslash

@@ -1,0 +1,16 @@
+---
+# Boot order of the lab VMs after the Proxmox host starts (the lab is powered on
+# and off). Applied here rather than by OpenTofu because changing a VM's
+# `startup` needs Sys.Modify on `/`, which OpenTofu's token deliberately does not
+# have (see docs/adr/0011-proxmox-api-token-privileges.md).
+#
+# Value = Proxmox `startup` string: `order` starts lowest first, `up` is the
+# number of seconds to wait after this VM before the next one starts.
+proxmox_vm_startup_orders:
+  # VPN gateway first, so remote access is back early.
+  101: "order=1"
+  # Control plane next, given time to come up before the workers try to reach it.
+  102: "order=2,up=60"
+  # Workers last.
+  103: "order=3"
+  104: "order=3"
