@@ -1,0 +1,23 @@
+# 90/10 split between the two podinfo versions. Weights are relative, not
+# percentages, so 90 and 10 happen to add up to 100. To shift traffic, change the
+# two numbers and let Argo CD sync; set a weight to 0 to stop sending to a version.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: podinfo
+spec:
+  parentRefs:
+    - name: demo
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: podinfo-v1
+          port: 9898
+          weight: 90
+        - name: podinfo-v2
+          port: 9898
+          weight: 10

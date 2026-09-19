@@ -1,0 +1,12 @@
+# Namespace-wide strict mTLS: sidecars in this namespace reject plaintext traffic.
+# Without a workloadSelector it covers every workload, including the generated
+# gateway; the gateway's public listener is a Gateway API listener, not a sidecar
+# inbound port, so it is expected to keep accepting plaintext HTTP from outside
+# (checked in the README verification steps).
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+spec:
+  mtls:
+    mode: STRICT

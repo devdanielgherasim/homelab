@@ -1,0 +1,43 @@
+# Weighted-routing demo: two podinfo versions behind an Istio-managed Gateway API
+# gateway, strict mTLS. Plain manifests in kubernetes/apps/mesh-demo/.
+# Project is `platform` for now: project `apps` only allows namespace `demo`, and
+# this workload also needs to create a Gateway (gateway.networking.k8s.io) and a
+# PeerAuthentication, which `apps` does not whitelist either. Move it to `apps`
+# once that project allows namespace mesh-demo and those two kinds.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mesh-demo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/devdanielgherasim/homelab.git
+    targetRevision: main
+    path: kubernetes/apps/mesh-demo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mesh-demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        istio-injection: enabled
+        # Sidecars run as non-root with all capabilities dropped (istio-cni does the
+        # traffic redirection), so baseline is enough; restricted is warn/audit only.
+        pod-security.kubernetes.io/enforce: baseline
+        pod-security.kubernetes.io/warn: restricted
+        pod-security.kubernetes.io/audit: restricted
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

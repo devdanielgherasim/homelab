@@ -1,0 +1,22 @@
+# The gateway is created by Istio from this Gateway (GatewayClass `istio`, which
+# istiod registers itself): Istio generates a Deployment and a LoadBalancer Service
+# named demo-istio. The Service takes its address from Cilium LB IPAM; no address
+# is stored in Git.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: demo
+spec:
+  gatewayClassName: istio
+  infrastructure:
+    # Copied onto the generated Service (and Deployment). Cilium's IP pool selects
+    # Services by this label, see kubernetes/platform/mesh/README.md.
+    labels:
+      homelab.io/lb-pool: private
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
