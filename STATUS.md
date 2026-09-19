@@ -25,14 +25,14 @@ The roadmap and its numbering live in one place:
 | Component | State | Evidence / notes |
 |---|---|---|
 | Repository structure, docs, ADRs | IMPLEMENTED | ADR set in `docs/adr/`. |
-| CI (`validate`, `security`) | IMPLEMENTED | GitHub-hosted runners only. `validate` was red until 2026-09-19 (see plan); fixes are local and unpushed, so check the badge in the README for current state. Includes an `ansible-converge` job that applies roles in a throwaway container. |
+| CI (`validate`, `security`) | IMPLEMENTED | GitHub-hosted runners only. `validate` was red from the first run until 2026-09-19; after the fixes both `validate` and `security` pass on `main` (verified on the runner, including the `ansible-converge` job that applies roles in a throwaway container). `main` requires those status checks; direct pushes by the owner are still allowed and PRs are not yet required. |
 | Proxmox host (VE 9.2) | DEPLOYED | Physically installed, configured by Ansible. |
 | Proxmox bootstrap: network check, API token, SSH key, firewall, key-only SSH | DEPLOYED | `ansible/roles/proxmox_bootstrap/`. All six stages run against the host; key-only SSH confirmed from a fresh session after lockdown. |
 | Ubuntu 24.04 cloud-init template (VMID 9000) | DEPLOYED | `ansible/roles/proxmox_template/`. `qm config 9000` shows `template: 1`, disk and cloud-init drive attached, agent enabled. |
 | OpenTofu VM provisioning | DEPLOYED | `Apply complete! Resources: 4 added, 0 changed, 0 destroyed.` All four VMs reachable (ping, SSH, `cloud-init status: done`). |
 | `vpn01` (Tailscale gateway) | DEPLOYED (VM only) | VM exists and is hardened. **Tailscale is not configured yet**; it does not act as a gateway. |
 | `cp01`, `worker01`, `worker02` | DEPLOYED | Cloud-init done, hardened, joined to the cluster. |
-| Guest hardening (SSH, unattended upgrades) | DEPLOYED (first version); drop-in rewrite IMPLEMENTED | `ansible/roles/guest_hardening/`. First version ran on all four VMs (`0 failed`, no automatic reboot by design). The role was since rewritten to use an `sshd_config.d/00-hardening.conf` drop-in verified with `sshd -T`; it passes a container converge test (`scripts/test-guest-hardening.sh`: beats a cloud-init override, idempotent, lock-out guard) but has **not been re-applied to the VMs yet**. |
+| Guest hardening (SSH, unattended upgrades) | DEPLOYED, verified | `ansible/roles/guest_hardening/`. The `sshd_config.d/00-hardening.conf` drop-in was applied to all four VMs on 2026-09-19, one host at a time. Verified on each with a fresh connection: key login works, password and root login are refused, and `sshd -T` shows `passwordauthentication no`, `permitrootlogin no`, `maxauthtries 3`, `allowusers ubuntu`. A `--check` re-run reports `changed=0` on all four. Also covered by a container converge test in CI. No automatic reboot by design. |
 | Kubernetes bootstrap (kubeadm, containerd) | DEPLOYED | `v1.37.0`, `containerd://2.3.5`. Live check 2026-09-19: three nodes present, all `NotReady`; control-plane static pods `Running`; `kube-proxy` still present. |
 | Cilium / Hubble | PLANNED | Next milestone. |
 | MetalLB | PLANNED | — |

@@ -86,16 +86,18 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
 
 ### Phase B — hardening as code (review, then apply with approval)
 
-- [ ] 10. Guest SSH hardening via `sshd_config.d/00-hardening.conf` drop-in,
+- [x] 10. Guest SSH hardening via `sshd_config.d/00-hardening.conf` drop-in,
   verified with `sshd -T`.
-  - DONE (code + test): role rewritten (`templates/sshd_00-hardening.conf.j2`,
-    handler, lock-out guard, `sshd -T` assertion); `scripts/test-guest-hardening.sh`
-    proves it beats a cloud-init override, is idempotent, and refuses a
-    lock-out allow-list; CI job `ansible-converge` added.
-  - PENDING: apply to the four real VMs (needs user approval — it changes
-    remote-access rules; rollback is deleting the drop-in over the still-open
-    SSH session or the Proxmox console). Deliberately not added: ufw (would
-    fight Cilium's datapath), fail2ban (key-only SSH).
+  - Code + container converge test + CI job `ansible-converge` (green on the
+    GitHub runner).
+  - APPLIED 2026-09-19 with user approval: `--check --diff` first, then
+    worker02, worker01, cp01, vpn01 one at a time, each verified from a fresh
+    SSH connection (key login ok; password and root login refused). `--check`
+    re-run: `changed=0` on all four. The role was also made safe under
+    `--check` (read-only `sshd -t`/`-T` run with `check_mode: false`; the
+    effective-config assertion is skipped in check mode).
+  - Deliberately not added: ufw (would fight Cilium's datapath), fail2ban
+    (key-only SSH).
 - [ ] 11. Proxmox RBAC: custom least-privilege role scoped to `/vms` (or a
   pool) instead of `PVEVMAdmin` at `/`; pin the Proxmox TLS fingerprint /
   install a real CA instead of `insecure = true`.
@@ -121,32 +123,32 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
 - [ ] 19. MetalLB, Gateway API + Istio, Argo CD (GitOps), Kyverno, cert-manager,
   observability — each with an ADR/doc update and STATUS.md change.
 - [ ] 20. Workflow: PRs with required status checks on `main`, signed commits.
+  - DONE 2026-09-19: required status checks set on `main` via the API
+    (`changes`, `tofu`, `ansible`, `ansible-converge`, `kubernetes`, `shell`,
+    `docs`, `gitleaks`, `topology-guard`); `enforce_admins` left off so the
+    owner can still push directly.
+  - PENDING: require pull requests, signed commits, `enforce_admins`.
 
 ## Resume notes
 
-Phase A (tasks 1-9) done locally; task 10 code and container test done.
-Everything is uncommitted and unpushed. Verified in WSL Ubuntu-24.04 (mise
-shims on PATH; run a script through `wsl -d Ubuntu-24.04 -- bash <script>`
-from the PowerShell tool) and Docker (from Git Bash): ansible-lint production
-profile, `tofu fmt -check`, yamllint, markdownlint, gitleaks, shellcheck, the
-topology guard, and `scripts/test-guest-hardening.sh` (PASS, ~85 s). NOT
-verified: the GitHub Actions run itself (needs a push, which needs user
-approval), `actionlint` (not installed in WSL), and that the new
-`ansible-converge` job works on GitHub's runner (cgroup mount for systemd).
+Tasks 1-10 done; 20 partially (required status checks set on `main`).
+Everything up to the SSH hardening is pushed and CI is green.
 
-Also done this session: SECURITY.md contact is now
-`contact@danielgherasim.com`; `scripts/doctor.sh` now really compares tool
-versions with `mise.toml` (it only claimed to) and no longer fails shellcheck.
+Tooling notes for the next session: Ansible against real hosts runs from WSL
+Ubuntu-24.04 with `ANSIBLE_CONFIG` set explicitly (Ansible ignores
+`ansible.cfg` inside the world-writable `/mnt/e` tree). Scratch scripts used
+this session lived in the session scratchpad (`hard.sh`, `verify.sh`,
+`lint.sh`); recreate them if needed. Inventory and group_vars are local and
+gitignored.
 
-Decisions still needed from the user: (a) commit + push so CI can be re-run;
-(b) approval to apply the SSH drop-in to the VMs; (c) approval for Phase C
-step 15 (Cilium) once impact/rollback are stated.
+Waiting on the user: (a) Tailscale account with MFA and an auth key (the key
+goes straight onto `vpn01`, never into the repo or chat); (b) go-ahead for
+Cilium (task 15) after impact/rollback are stated; (c) `PROXMOX_VE_ENDPOINT` /
+`PROXMOX_VE_API_TOKEN` in the local shell for a real `tofu plan`.
 
-Next action: task 12 (declarative `kubeadm-config.yaml`, validated with
-`kubeadm config validate`), then 11, 13, 14. None of these may be applied to
-real hosts without approval. Do not change `tofu/` resource attributes
-without a real `tofu plan` (needs `PROXMOX_VE_*` env vars) — disk/protection
-changes can force VM replacement.
+Next action: present the Cilium plan (impact, rollback, downtime), then
+task 15. Code-only work still open: 11, 12, 13, 14, 16 (Tailscale role,
+without a key), 18.
 
 ## Verification
 

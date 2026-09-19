@@ -42,6 +42,7 @@
     cmd: /usr/sbin/sshd -t
   become: true
   changed_when: false
+  check_mode: false # read-only, so it is safe (and useful) under --check
 
 # Applied now rather than at the end of the play, so the assertion below
 # reads the state sshd will actually run with.
@@ -53,11 +54,14 @@
     cmd: /usr/sbin/sshd -T
   become: true
   changed_when: false
+  check_mode: false # read-only
   register: guest_hardening_sshd_effective
 
 - name: Assert the effective configuration matches the policy
   # `sshd -T` prints the configuration sshd will really use, after all
-  # includes and first-match-wins resolution.
+  # includes and first-match-wins resolution. Skipped under --check: nothing
+  # was written, so the effective state is still the old one.
+  when: not ansible_check_mode
   ansible.builtin.assert:
     that:
       - "'passwordauthentication no' in guest_hardening_sshd_effective.stdout_lines"
