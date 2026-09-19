@@ -1,0 +1,74 @@
+# Helm values for the Cilium CNI, chart 1.20.2 (cilium/cilium from
+# https://helm.cilium.io). See README.md in this directory for how to install
+# it and what has been verified.
+#
+# Every key below was checked against `helm show values cilium/cilium
+# --version 1.20.2`, not taken from documentation prose.
+
+# Cilium replaces kube-proxy. Boolean, not the old "strict"/"probe" strings.
+kubeProxyReplacement: true
+
+# Without kube-proxy the in-cluster `kubernetes` Service does not work during
+# bootstrap, so the agent must reach the API server directly. The host is the
+# control-plane address of this lab, which is real network topology and is
+# therefore passed at install time (--set k8sServiceHost=...), never committed.
+k8sServicePort: 6443
+
+ipam:
+  mode: cluster-pool
+  operator:
+    # Matches --pod-network-cidr in ansible/roles/kubeadm_init.
+    clusterPoolIPv4PodCIDRList: ["10.244.0.0/16"]
+    clusterPoolIPv4MaskSize: 24
+
+operator:
+  # One control-plane node: the default of 2 replicas has anti-affinity and
+  # would leave the second pod Pending.
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+# Envoy runs as one extra DaemonSet pod per node and is only needed for L7
+# features (Ingress, Gateway API, L7 policy). North-south traffic goes through
+# Istio (ADR-0006), and nodes have ~3 GB of RAM, so leave it off.
+envoy:
+  enabled: false
+
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+  ui:
+    enabled: true
+    frontend:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+    backend:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+
+# Agent: bounded memory so the observability stack that follows still fits.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi

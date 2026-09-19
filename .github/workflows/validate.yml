@@ -122,7 +122,8 @@ jobs:
           curl -sSfL -O "${base}/kubeconform-linux-amd64.tar.gz" -O "${base}/CHECKSUMS"
           sha256sum --check --ignore-missing CHECKSUMS
           tar xzf kubeconform-linux-amd64.tar.gz kubeconform
-          find kubernetes -name '*.yaml' -print0 | xargs -0 -r ./kubeconform -strict -summary
+          # Helm values files are not Kubernetes resources (no `kind`), so they are skipped.
+          find kubernetes -name '*.yaml' -print0 | xargs -0 -r ./kubeconform -strict -summary -ignore-filename-pattern '(^|/)values[^/]*[.]ya?ml$'
 
   shell:
     needs: changes
