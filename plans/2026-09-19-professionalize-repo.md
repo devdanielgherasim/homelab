@@ -112,9 +112,18 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
 
 ### Phase C — platform roadmap (each step needs explicit approval to apply)
 
-- [ ] 15. Cilium + Hubble install: remove kube-proxy DaemonSet/ConfigMap,
+- [x] 15. Cilium + Hubble install: remove kube-proxy DaemonSet/ConfigMap,
   install Cilium with `kubeProxyReplacement=true`, nodes `Ready`, run the
   Cilium connectivity test.
+  - DONE 2026-09-19 with user approval. Proxmox snapshots `pre-cilium` on
+    102/103/104 first; chart 1.20.2; values in
+    `kubernetes/bootstrap/cilium/values.yaml` (no IPs; `k8sServiceHost` is
+    passed with `--set`). Result: nodes `Ready`, `KubeProxyReplacement: True`,
+    connectivity test 82 tests / 707 actions successful, 0 failed.
+  - Deviation recorded: Cilium 1.20.2 is not upstream-tested on Kubernetes
+    1.37. Follow-ups: Hubble Relay server TLS; delete the `pre-cilium`
+    snapshots once satisfied (they grow on a thin pool that is already
+    over-provisioned).
 - [ ] 16. Tailscale on `vpn01` + subnet router; then restrict Proxmox UI / API
   to the VPN.
 - [ ] 17. Network segmentation (VLAN or bridges) per `networking.md`.
@@ -131,24 +140,26 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
 
 ## Resume notes
 
-Tasks 1-10 done; 20 partially (required status checks set on `main`).
-Everything up to the SSH hardening is pushed and CI is green.
+Tasks 1-10, 15 done; 20 partial. Cilium is live (see task 15). New findings
+recorded in STATUS.md: `qemu-guest-agent` is not running in the VMs; the
+`local-lvm` thin pool is over-provisioned with no autoextend threshold; Hubble
+Relay TLS is off; Cilium 1.20.2 runs on an untested Kubernetes minor.
 
-Tooling notes for the next session: Ansible against real hosts runs from WSL
-Ubuntu-24.04 with `ANSIBLE_CONFIG` set explicitly (Ansible ignores
-`ansible.cfg` inside the world-writable `/mnt/e` tree). Scratch scripts used
-this session lived in the session scratchpad (`hard.sh`, `verify.sh`,
-`lint.sh`); recreate them if needed. Inventory and group_vars are local and
-gitignored.
+Kubeconfig for the cluster is in WSL at `~/.kube/homelab.conf` (outside the
+repo, mode 600). CLI tools: `cilium` v0.20.0 in `~/.local/bin` (WSL). Run
+`kubectl`/`helm` from inside the repo directory so mise resolves the pinned
+versions.
 
-Waiting on the user: (a) Tailscale account with MFA and an auth key (the key
-goes straight onto `vpn01`, never into the repo or chat); (b) go-ahead for
-Cilium (task 15) after impact/rollback are stated; (c) `PROXMOX_VE_ENDPOINT` /
-`PROXMOX_VE_API_TOKEN` in the local shell for a real `tofu plan`.
+Uncommitted: the Cilium values/README, ADR-0005 -> Accepted, STATUS.md,
+overview/kubernetes docs, the CI/Makefile change that lets kubeconform skip
+Helm values files, and this plan. Pushing needs the user's go-ahead.
 
-Next action: present the Cilium plan (impact, rollback, downtime), then
-task 15. Code-only work still open: 11, 12, 13, 14, 16 (Tailscale role,
-without a key), 18.
+Waiting on the user: Tailscale account (MFA) and auth key for task 16;
+`PROXMOX_VE_*` in the local shell for a real `tofu plan` (task 14).
+
+Next action: commit + push (with approval), then task 16 (Tailscale role,
+no key in Git). Code-only work still open: 11, 12, 13, 14, 18; also get the
+guest agent running in the VMs (needs a package/service fix, not just a flag).
 
 ## Verification
 

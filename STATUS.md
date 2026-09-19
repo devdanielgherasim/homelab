@@ -9,12 +9,13 @@ representative environment) · **DEPLOYED** (running in the actual homelab).
 
 ## Current focus
 
-Phases 1 and 3 of the roadmap are done: Proxmox is bootstrapped, the Ubuntu
+Phases 1, 3 and 4 of the roadmap are done: Proxmox is bootstrapped, the Ubuntu
 24.04 template is built, four VMs (`vpn01`, `cp01`, `worker01`, `worker02`)
 are provisioned and hardened, and a 3-node upstream Kubernetes cluster is
-initialized. The nodes are `NotReady` and CoreDNS is `Pending` because no CNI
-is installed yet. Phase 4 (Cilium + Hubble) is next. The current
-work item is a repository-quality pass — see
+initialized. Phase 4 is done too: Cilium 1.20.2 (kube-proxy replaced) and
+Hubble are installed, all nodes are `Ready`, and the official connectivity
+test passes. The next steps are secure remote access (Tailscale) and service
+exposure. Ongoing work is a repository-quality pass — see
 [`plans/2026-09-19-professionalize-repo.md`](plans/2026-09-19-professionalize-repo.md).
 
 The roadmap and its numbering live in one place:
@@ -33,8 +34,8 @@ The roadmap and its numbering live in one place:
 | `vpn01` (Tailscale gateway) | DEPLOYED (VM only) | VM exists and is hardened. **Tailscale is not configured yet**; it does not act as a gateway. |
 | `cp01`, `worker01`, `worker02` | DEPLOYED | Cloud-init done, hardened, joined to the cluster. |
 | Guest hardening (SSH, unattended upgrades) | DEPLOYED, verified | `ansible/roles/guest_hardening/`. The `sshd_config.d/00-hardening.conf` drop-in was applied to all four VMs on 2026-09-19, one host at a time. Verified on each with a fresh connection: key login works, password and root login are refused, and `sshd -T` shows `passwordauthentication no`, `permitrootlogin no`, `maxauthtries 3`, `allowusers ubuntu`. A `--check` re-run reports `changed=0` on all four. Also covered by a container converge test in CI. No automatic reboot by design. |
-| Kubernetes bootstrap (kubeadm, containerd) | DEPLOYED | `v1.37.0`, `containerd://2.3.5`. Live check 2026-09-19: three nodes present, all `NotReady`; control-plane static pods `Running`; `kube-proxy` still present. |
-| Cilium / Hubble | PLANNED | Next milestone. |
+| Kubernetes bootstrap (kubeadm, containerd) | DEPLOYED | `v1.37.0`, `containerd://2.3.5`; control plane and both workers `Ready`. |
+| Cilium / Hubble | DEPLOYED, verified | Chart 1.20.2, `kubernetes/bootstrap/cilium/`. `kube-proxy` removed; `KubeProxyReplacement: True`; nodes `Ready`; `cilium connectivity test`: 82 tests successful, 0 failed (55 skipped, listed in the README there). Snapshots `pre-cilium` exist on the three nodes. Runs on Kubernetes 1.37, which is outside the 1.33-1.36 range upstream tests. |
 | MetalLB | PLANNED | — |
 | Istio + Gateway API | PLANNED | — |
 | Argo CD | PLANNED | — |
@@ -55,7 +56,10 @@ Stated openly so nobody mistakes the target architecture for the current one.
 |---|---|---|
 | Network segmentation | Separate management, node and load-balancer networks | All VMs share one flat network on `vmbr0` with the household LAN |
 | Management access | VPN-only (ADR-0008) | Proxmox UI, SSH and the Kubernetes API are reachable from the LAN; Tailscale not configured |
-| Pod networking | Cilium with kube-proxy replacement | No CNI; default `kube-proxy` still deployed |
+| Cilium and Kubernetes versions | Inside the upstream-tested matrix | Cilium 1.20.2 lists Kubernetes 1.33-1.36; the cluster runs 1.37.0 |
+| Hubble Relay TLS | Encrypted | Relay server TLS is off (in-cluster only); on the hardening list |
+| Guest agent | Running in every VM | `qemu-guest-agent` is not running, so Proxmox snapshots are crash-consistent and the provider cannot read VM IPs |
+| VM storage | Headroom on the thin pool | `local-lvm` is over-provisioned (thin volumes exceed pool size); no autoextend threshold |
 | Proxmox API RBAC | Least privilege | Token has `PVEVMAdmin` at `/` plus scoped storage and SDN roles |
 | Proxmox API TLS | Verified certificate | Provider runs with `insecure = true` for the self-signed certificate |
 | Availability | Learning-grade | Single physical host, single control-plane node |
@@ -68,15 +72,14 @@ Stated openly so nobody mistakes the target architecture for the current one.
 
 ## Next milestone
 
-Phase 4 — Cluster networking:
+Phase 2 — Secure remote access: install and configure Tailscale on `vpn01`
+and advertise the node network (see `docs/architecture/networking.md`). Needs
+a Tailscale account with MFA and an auth key that is placed on the VM
+directly, never in Git.
 
-1. Remove the `kube-proxy` DaemonSet, install Cilium and Hubble, and confirm
-   the nodes turn `Ready` (see `docs/architecture/kubernetes.md`).
-2. Run the Cilium connectivity test and record the result.
-
-In parallel, Phase 2 — Secure remote access: install and configure Tailscale
-on `vpn01` and advertise the node network (see
-`docs/architecture/networking.md`). Not blocking phase 4.
+Then Phase 5 — Service exposure: MetalLB, Gateway API CRDs and Istio, with a
+private sample app. Before any of that is published, close the flat-network
+and management-access deviations above.
 
 Anything that changes the running infrastructure follows the
 destructive-action policy in [`AGENTS.md`](AGENTS.md). Work is tracked in

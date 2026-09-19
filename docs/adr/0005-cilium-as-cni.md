@@ -1,6 +1,6 @@
 # 0005. Cilium as CNI
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-15
 
 ## Context
@@ -33,3 +33,11 @@ eBPF requires a reasonably current kernel (satisfied by Ubuntu 24.04 —
 at rest; acceptable under the sizing in
 [`../architecture/infrastructure.md`](../architecture/infrastructure.md).
 Hubble becomes the default tool for network troubleshooting runbooks.
+
+Deployed on 2026-09-19 as Cilium 1.20.2 with kube-proxy replacement, Hubble
+relay and UI, and Envoy disabled (no L7 features; Gateway API is provided by
+Istio, [ADR 0006](0006-istio-gateway-api.md)). Cilium 1.20.2's compatibility
+table lists Kubernetes 1.33-1.36 as tested; this cluster runs 1.37.0, so the
+combination is outside upstream's tested matrix. It was verified with the
+official connectivity test instead; see
+[`../../kubernetes/bootstrap/cilium/README.md`](../../kubernetes/bootstrap/cilium/README.md).

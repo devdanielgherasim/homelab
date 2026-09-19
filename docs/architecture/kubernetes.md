@@ -13,6 +13,9 @@ sizing.
 
 ## Cilium (CNI)
 
+Deployed — installation, values and the verification result are in
+[`../../kubernetes/bootstrap/cilium/README.md`](../../kubernetes/bootstrap/cilium/README.md).
+
 - eBPF datapath for pod networking.
 - `NetworkPolicy` (default-deny, explicit allow for DNS and required flows
   — see [`../security/`](../security/) once workload policies exist).
