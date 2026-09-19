@@ -275,8 +275,16 @@ then one integration pass here. Nothing is applied to the cluster without approv
     Lesson: agents need `rollout restart` after the ConfigMap change (see ADR-0015).
   - Open: push the policy Application (`cilium-l2`) so Argo CD owns it; the Gateway
     API CRDs come with the G3 Applications.
-- [ ] G3. Istio + Gateway API gateway, cert-manager with a private CA if needed,
-  a sample app with weighted routing, mTLS, private access only.
+- [x] G3. Istio + Gateway API gateway, a sample app with weighted routing, mTLS,
+  private access only. cert-manager not needed yet (HTTP listener, no TLS termination).
+  - DONE 2026-09-20 in three verified steps, each pushed with approval: Gateway API CRDs
+    (`3e305ce`), Istio (`73a422f`), `mesh-demo` (`f5c788b`, then fixes `034873e` and
+    `c7d2b3c`). Verified: injection on both workers under baseline, 187/13 split,
+    STRICT rejects plain traffic, meshed traffic `mutual_tls`. All 10 Applications
+    `Synced/Healthy`.
+  - Lessons: the agent-written demo manifests had two bugs no offline validator sees
+    (`args` without `command` replaced the image CMD; HTTPRoute defaults missing, so the
+    Application stayed OutOfSync). Test agent output on the cluster before pushing.
 - [ ] G4. Observability (Prometheus + Grafana, Hubble metrics, capacity dashboards
   for later autoscaling), logs only if they fit in RAM, storage decision without a
   StorageClass.

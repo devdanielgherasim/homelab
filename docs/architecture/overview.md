@@ -105,7 +105,7 @@ hardware SPOF — see [`infrastructure.md`](infrastructure.md#backup-recovery-an
 | 2 — Secure remote access | Create `vpn01`, configure Tailscale/subnet routing, validate no management service is WAN-reachable. | Partial — `vpn01` exists and is hardened; Tailscale not configured |
 | 3 — Kubernetes bootstrap | Create `cp01`/`worker01`/`worker02`; install containerd, kubeadm, kubelet, kubectl; bootstrap cluster. | Done — nodes `NotReady` until a CNI is installed |
 | 4 — Cluster networking | Install Cilium and Hubble; validate pod-to-pod, DNS, NetworkPolicy behavior. | Done — Cilium 1.20.2 with kube-proxy replacement, Hubble, connectivity test passed |
-| 5 — Service exposure | Install MetalLB, Gateway API CRDs, Istio; publish a private sample app through an Istio Gateway. | Planned |
+| 5 — Service exposure | Cilium L2 load balancer, Gateway API CRDs, Istio; publish a private sample app through an Istio Gateway. | Done for the private LAN — weighted routing and strict mTLS verified |
 | 6 — GitOps | Install Argo CD; move platform config and sample apps to declarative repositories. | In progress — Argo CD deployed and verified; platform components move under it as they land |
 | 7 — Security controls | Add SOPS+age, Kyverno, Trivy; harden SSH and workload security contexts. | Planned |
 | 8 — Observability | Deploy Prometheus/Grafana/Loki/Tempo with small resource limits and short retention. | Planned |

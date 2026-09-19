@@ -41,7 +41,7 @@ The roadmap and its numbering live in one place:
 | Argo CD (GitOps) | DEPLOYED, verified | Chart 10.9.2 (v3.5.3), `kubernetes/bootstrap/argocd/`, ADR-0007 and ADR-0014. Installed 2026-09-20: 5 pods `Running`, 544 MiB of memory requests, `restricted` Pod Security. Root app-of-apps plus three AppProjects; `argocd` (self-managed), `platform` and `podinfo` reached `Synced/Healthy` from Git in 30 s. Loop verified: a manual scale-up was reverted by self-heal in 3 s and a deleted Service was recreated in 3 s. The UI is reachable only by port-forward. **The initial admin password has to be rotated and `argocd-initial-admin-secret` deleted by the owner.** Argo CD 3.5 lists Kubernetes 1.33-1.36 as tested; the cluster runs 1.37. |
 | Cilium / Hubble | DEPLOYED, verified | Chart 1.20.2, `kubernetes/bootstrap/cilium/`. `kube-proxy` removed; `KubeProxyReplacement: True`; nodes `Ready`; `cilium connectivity test`: 82 tests successful, 0 failed (55 skipped, listed in the README there). Snapshots `pre-cilium` exist on the three nodes. Runs on Kubernetes 1.37, which is outside the 1.33-1.36 range upstream tests. |
 | MetalLB | PLANNED | — |
-| Istio + Gateway API | PLANNED | — |
+| Istio + Gateway API | DEPLOYED, verified | ADR-0006, `kubernetes/platform/mesh/`, `kubernetes/apps/mesh-demo/`. Istio 1.31.0 in sidecar mode with `istio-cni`, Gateway API CRDs v1.6.2 (standard), installed by Argo CD. Demo app: `Gateway` of class `istio` with an address from the Cilium pool, `HTTPRoute` 90/10 (measured 187/13 in 200 requests), `PeerAuthentication` STRICT (plain traffic from an unmeshed namespace is reset, meshed traffic is `mutual_tls`). About 630 Mi of memory requests. Istio 1.31 lists Kubernetes 1.32-1.36; the cluster runs 1.37. |
 | Kyverno / Trivy runtime scanning | PLANNED | Trivy config scan already runs in CI on IaC. |
 | SOPS + age | PLANNED | Blocked on the public-repo threat-model ADR. |
 | Prometheus / Grafana / Loki / Tempo | PLANNED | — |
@@ -60,7 +60,7 @@ Stated openly so nobody mistakes the target architecture for the current one.
 |---|---|---|
 | Network segmentation | Separate management, node and load-balancer networks | All VMs share one flat network on `vmbr0` with the household LAN |
 | Management access | VPN-only (ADR-0008) | The VPN path exists, but Proxmox UI, SSH and the Kubernetes API are still reachable directly from the LAN; the Proxmox firewall has not been narrowed to the VPN yet |
-| Component versions vs Kubernetes | Inside the upstream-tested matrix | Cilium 1.20.2 and Argo CD 3.5 list Kubernetes 1.33-1.36; the cluster runs 1.37.0 |
+| Component versions vs Kubernetes | Inside the upstream-tested matrix | Cilium 1.20.2 and Argo CD 3.5 list Kubernetes 1.33-1.36 and Istio 1.31 lists 1.32-1.36; the cluster runs 1.37.0 |
 | VM storage | Headroom on the thin pool | `local-lvm` is over-provisioned (thin volumes exceed pool size); no autoextend threshold |
 | Kubelet serving certificates | CA-signed (CIS 1.2.5) | Self-signed; needs `serverTLSBootstrapping` and a CSR approver, deferred (ADR-0013) |
 | Availability | Learning-grade | Single physical host, single control-plane node |
@@ -82,8 +82,8 @@ until then the LAN stays a trusted management network. Also outstanding:
 two-factor authentication on the Proxmox web UI, and confirming the router
 forwards no management ports.
 
-Then Phase 5 — Service exposure: MetalLB, Gateway API CRDs and Istio, with a
-private sample app. Before any of that is published, close the flat-network
+Phase 5 — Service exposure is done for the private LAN (Cilium L2 load balancer, Gateway API,
+Istio, a sample app). Before anything is published beyond the LAN, close the flat-network
 and management-access deviations above.
 
 Anything that changes the running infrastructure follows the

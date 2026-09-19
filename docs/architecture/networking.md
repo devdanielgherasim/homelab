@@ -20,7 +20,7 @@ live in a local file excluded by `.gitignore` (`local/`).
 | Home LAN | *(existing household network — not published; see `local/` override)* | Router NAT and general household connectivity |
 | Management | `10.10.10.0/24` | Proxmox management and administrative services |
 | Kubernetes nodes | `10.10.20.0/24` | Control-plane and worker node addresses |
-| LoadBalancer pool | `10.10.30.0/24` | Addresses assigned to LoadBalancer services / Istio Gateway |
+| LoadBalancer pool | `10.10.30.0/24` (planned; today a small free block on the flat node LAN, in a private inventory) | Addresses assigned to LoadBalancer services / Istio Gateway |
 | Pod CIDR | `10.244.0.0/16` | Kubernetes pod addresses |
 | Service CIDR | `10.96.0.0/12` | Kubernetes ClusterIP virtual services |
 

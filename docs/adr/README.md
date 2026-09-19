@@ -19,7 +19,7 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0003](0003-upstream-kubernetes-over-k3s.md) | Upstream Kubernetes (kubeadm) over k3s/managed distros | Accepted |
 | [0004](0004-opentofu-over-terraform.md) | OpenTofu instead of Terraform | Accepted |
 | [0005](0005-cilium-as-cni.md) | Cilium as CNI | Accepted |
-| [0006](0006-istio-gateway-api.md) | Istio + Kubernetes Gateway API for north-south traffic | Proposed |
+| [0006](0006-istio-gateway-api.md) | Istio + Kubernetes Gateway API for north-south traffic | Accepted |
 | [0007](0007-argocd-for-gitops.md) | Argo CD for GitOps | Accepted |
 | [0008](0008-vpn-only-management-plane.md) | VPN-only management plane (Tailscale) | Proposed |
 | [0009](0009-flat-network-until-vpn.md) | Single flat network until the VPN and segmentation exist | Accepted |
@@ -32,6 +32,6 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 
 New ADRs get the next sequential number and are added to this table.
 
-ADRs 0001-0005, 0007, 0014 and 0015 are implemented and in use. 0006 and 0008 describe the platform
+ADRs 0001-0007, 0014 and 0015 are implemented and in use. 0008 describes the platform
 layer that is not built yet and stay **Proposed** until the corresponding
 component is deployed and the decision is confirmed.

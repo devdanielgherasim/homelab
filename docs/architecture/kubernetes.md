@@ -22,15 +22,19 @@ Deployed — installation, values and the verification result are in
 - Hubble for flow visibility — the primary tool for the NetworkPolicy and
   CNI failure scenarios in [`infrastructure.md`](infrastructure.md#failure-scenarios-to-practice).
 
-## MetalLB
+## LoadBalancer addresses (Cilium)
 
-Bare-metal LoadBalancer IP allocation from the LoadBalancer pool defined in
-[`networking.md`](networking.md#addressing-plan) (`10.10.30.0/24`).
+Bare-metal LoadBalancer IP allocation comes from Cilium LB IPAM with L2 announcements,
+not MetalLB ([ADR-0015](../adr/0015-loadbalancer-cilium-l2.md)). The pool is a small block
+of free addresses on the nodes' LAN, kept in a private inventory; only Services labelled
+`homelab.io/lb-pool: private` receive one.
 
 ## Istio + Gateway API
 
 North-south traffic enters through an Istio Gateway implementing the
-Kubernetes Gateway API. See [`networking.md`](networking.md#kubernetes-traffic-path)
+Kubernetes Gateway API, in sidecar mode with `istio-cni`
+([ADR-0006](../adr/0006-istio-gateway-api.md), configuration in
+[`kubernetes/platform/mesh/`](../../kubernetes/platform/mesh/README.md)). See [`networking.md`](networking.md#kubernetes-traffic-path)
 for the routing diagram. East-west traffic can optionally join the mesh
 for mTLS between services. Features to exercise: mTLS, weighted
 routing/canary deployment, timeouts, retries, circuit-breaking, telemetry,
