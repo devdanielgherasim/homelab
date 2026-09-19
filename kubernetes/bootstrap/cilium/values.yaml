@@ -32,6 +32,22 @@ operator:
     limits:
       memory: 256Mi
 
+# LoadBalancer addresses on the LAN without MetalLB (ADR-0015): one node claims each
+# address with ARP. Needs kubeProxyReplacement (set above). The address pool and the
+# announcement policy live outside this file: the pool has real LAN addresses
+# (ansible/roles/cilium_lb_pool) and the policy is in kubernetes/platform/networking/.
+l2announcements:
+  enabled: true
+
+# Istio's sidecar (and ambient) traffic redirection conflicts with Cilium's
+# socket-level load balancing inside pods. Keep socket LB to the host namespace, so
+# service traffic from pods is balanced per packet instead, and do not let Cilium
+# delete the chained istio-cni configuration.
+socketLB:
+  hostNamespaceOnly: true
+cni:
+  exclusive: false
+
 # Envoy runs as one extra DaemonSet pod per node and is only needed for L7
 # features (Ingress, Gateway API, L7 policy). North-south traffic goes through
 # Istio (ADR-0006), and nodes have ~3 GB of RAM, so leave it off.

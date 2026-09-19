@@ -1,0 +1,30 @@
+# LoadBalancer announcement policy for Cilium (plain manifests from a directory of this
+# repository). The address pool is not here: it holds real LAN addresses and is applied
+# by ansible/roles/cilium_lb_pool. Cilium itself stays bootstrap-managed (ADR-0014).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cilium-l2
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/devdanielgherasim/homelab.git
+    targetRevision: main
+    path: kubernetes/platform/networking
+  # The policy is cluster-scoped; the namespace only satisfies the destination.
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

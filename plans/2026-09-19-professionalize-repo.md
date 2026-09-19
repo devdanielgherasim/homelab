@@ -268,8 +268,13 @@ then one integration pass here. Nothing is applied to the cluster without approv
     `argocd-initial-admin-secret`. The `projects` Application (added afterwards) puts
     the AppProjects under GitOps too.
 
-- [ ] G2. Load balancer (MetalLB or Cilium LB IPAM + L2, decided from research; an
-  ADR either way) and the Gateway API CRDs.
+- [x] G2. Load balancer (Cilium LB IPAM + L2, ADR-0015) and the Gateway API CRDs.
+  - DONE 2026-09-20 with the owner's approval: `helm upgrade` cilium (revision 3),
+    pool from the private inventory (`ansible/roles/cilium_lb_pool`, idempotent),
+    policy applied, temporary Service got an address and answered from the LAN.
+    Lesson: agents need `rollout restart` after the ConfigMap change (see ADR-0015).
+  - Open: push the policy Application (`cilium-l2`) so Argo CD owns it; the Gateway
+    API CRDs come with the G3 Applications.
 - [ ] G3. Istio + Gateway API gateway, cert-manager with a private CA if needed,
   a sample app with weighted routing, mTLS, private access only.
 - [ ] G4. Observability (Prometheus + Grafana, Hubble metrics, capacity dashboards

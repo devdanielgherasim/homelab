@@ -1,0 +1,16 @@
+---
+# Creates the CiliumLoadBalancerIPPool from a private list of LAN addresses (kept out
+# of Git). Additive: it only defines which addresses Cilium may hand out; nothing is
+# announced until a Service with the pool label exists. See
+# kubernetes/platform/networking/l2-announcement-policy.yaml and ADR-0015.
+#
+# Example:
+#   ansible-playbook -i inventories/production/ \
+#     playbooks/cilium-lb-pool.yml --private-key ~/.ssh/homelab_admin_ed25519 --check --diff
+
+- name: Define the LoadBalancer address pool
+  hosts: k8s_control_plane
+  become: true
+  gather_facts: false
+  roles:
+    - cilium_lb_pool

@@ -1,0 +1,14 @@
+# Managed by ansible/roles/cilium_lb_pool — do not edit by hand.
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: {{ cilium_lb_pool_name }}
+spec:
+  blocks:
+{% for block in cilium_lb_pool_blocks %}
+    - start: "{{ block.start }}"
+      stop: "{{ block.stop }}"
+{% endfor %}
+  serviceSelector:
+    matchLabels:
+      {{ cilium_lb_pool_label_key }}: {{ cilium_lb_pool_label_value }}

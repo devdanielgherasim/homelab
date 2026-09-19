@@ -34,6 +34,15 @@ the compatibility table when a Cilium release lists 1.37.
 address of this lab, which is network topology that stays out of a public
 repository, so it is passed at install time.
 
+Three more values were added for the LoadBalancer (ADR-0015) and the service mesh
+(ADR-0006): `l2announcements.enabled`, `socketLB.hostNamespaceOnly` (socket-level load
+balancing conflicts with Istio's traffic redirection inside pods) and `cni.exclusive:
+false` (istio-cni chains its own configuration, which Cilium must not delete).
+
+**After a `helm upgrade` that changes the ConfigMap, restart the agents**
+(`kubectl -n kube-system rollout restart ds/cilium`). Helm does not do it, and the agents
+keep the old setting; the log line `Mismatch found` from the config drift checker shows it.
+
 ## Install
 
 Prerequisites: a cluster without a CNI, `kubectl` and `helm` pointed at it.

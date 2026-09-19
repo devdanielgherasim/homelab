@@ -28,10 +28,10 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0012](0012-local-backups.md) | Backups stay on the Proxmox host, and cover only what has state | Accepted |
 | [0013](0013-control-plane-hardening.md) | Control-plane hardening, and what is deliberately left out | Accepted |
 | [0014](0014-gitops-structure.md) | GitOps structure: Argo CD app-of-apps, scoped projects, CNI outside GitOps | Accepted |
-| [0015](0015-loadbalancer-cilium-l2.md) | LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB | Proposed |
+| [0015](0015-loadbalancer-cilium-l2.md) | LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB | Accepted |
 
 New ADRs get the next sequential number and are added to this table.
 
-ADRs 0001-0005, 0007 and 0014 are implemented and in use. 0006, 0008 and 0015 describe the platform
+ADRs 0001-0005, 0007, 0014 and 0015 are implemented and in use. 0006 and 0008 describe the platform
 layer that is not built yet and stay **Proposed** until the corresponding
 component is deployed and the decision is confirmed.

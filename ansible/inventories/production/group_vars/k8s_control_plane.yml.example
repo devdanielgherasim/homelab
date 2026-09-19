@@ -1,0 +1,9 @@
+# Copy to k8s_control_plane.yml (same dir) and fill in real values. Gitignored —
+# never commit the real file. See docs/security/public-repository.md.
+
+# Addresses Cilium may give to LoadBalancer Services (the Gateway's address). Use
+# free addresses on the nodes' subnet, OUTSIDE the router's DHCP range and not used
+# by any device. A small block is enough: one address per exposed Gateway.
+cilium_lb_pool_blocks:
+  - start: "10.10.20.240"
+    stop: "10.10.20.245"

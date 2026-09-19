@@ -1,6 +1,6 @@
 # 0015. LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-20
 
 ## Context
@@ -41,3 +41,15 @@ Kubernetes 1.33-1.36 as tested; this cluster runs 1.37 (see ADR-0005).
 
 Enabling it changes Cilium's Helm values (a rolling restart of the agents) together with
 two settings the service mesh needs (`socketLB.hostNamespaceOnly`, `cni.exclusive: false`).
+
+Accepted on 2026-09-20 after a test on the cluster: a temporary `LoadBalancer` Service
+received the first address of the pool, the Lease `cilium-l2announce-demo-lb-test` was
+taken by `worker01` (the control plane is excluded by the policy), and the sample app
+answered on that address from the Windows PC on the LAN. The Service and the Lease
+disappeared together after the test.
+
+Lesson from the rollout: `helm upgrade` changes the Cilium ConfigMap but does not restart
+the agents. They kept running with `enable-l2-announcements=false` and logged
+`Mismatch found ... key=enable-l2-announcements` (the config drift checker) until
+`kubectl -n kube-system rollout restart ds/cilium` was run. The address was assigned
+(that is the operator) but nothing answered ARP. After the restart the warnings were gone.

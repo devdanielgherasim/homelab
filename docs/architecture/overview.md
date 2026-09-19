@@ -86,7 +86,7 @@ hardware SPOF — see [`infrastructure.md`](infrastructure.md#backup-recovery-an
 | VPN / bastion | Tailscale on `vpn01` | Private remote entry point and subnet router |
 | Kubernetes | `kubeadm` + containerd | Upstream Kubernetes with explicit control over bootstrap, PKI, node lifecycle |
 | CNI | Cilium | Pod networking, eBPF datapath, NetworkPolicy, Hubble flow visibility |
-| Load balancing | MetalLB | Bare-metal LoadBalancer IP allocation |
+| Load balancing | Cilium LB IPAM + L2 announcements | Bare-metal LoadBalancer IP allocation (ADR-0015) |
 | Traffic management | Istio + Gateway API | North-south gateway, service mesh, mTLS, routing, retries, canary traffic |
 | Certificates | cert-manager | Certificate automation for internal endpoints |
 | GitOps | Argo CD | Continuous reconciliation of platform and application desired state |
