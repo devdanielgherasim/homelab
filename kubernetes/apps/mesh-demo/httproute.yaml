@@ -5,9 +5,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: podinfo
+#
+# group and kind are written out although they are the CRD defaults: the API server
+# fills them in, and a manifest without them shows as OutOfSync in Argo CD forever.
 spec:
   parentRefs:
-    - name: demo
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: demo
       sectionName: http
   rules:
     - matches:
@@ -15,9 +20,13 @@ spec:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: podinfo-v1
+        - group: ""
+          kind: Service
+          name: podinfo-v1
           port: 9898
           weight: 90
-        - name: podinfo-v2
+        - group: ""
+          kind: Service
+          name: podinfo-v2
           port: 9898
           weight: 10
