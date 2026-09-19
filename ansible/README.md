@@ -22,16 +22,18 @@ ansible/
 ├── inventories/
 │   └── production/
 │       ├── hosts.example.yml            # copy to hosts.yml (gitignored), fill in real values
-│       └── group_vars/proxmox.yml.example  # copy to proxmox.yml (gitignored)
+│       └── group_vars/*.yml.example        # copy to *.yml (gitignored): proxmox, vpn_gateway
 ├── playbooks/
 │   ├── proxmox-bootstrap.yml   # implements installation.md steps 1-4 — see its header before running
 │   ├── proxmox-template.yml    # builds the cloud-init VM template
 │   ├── guest-hardening.yml     # SSH hardening + unattended upgrades on the 4 VMs
+│   ├── tailscale.yml           # vpn01 as a Tailscale subnet router
 │   └── k8s-bootstrap.yml       # containerd + kubeadm init/join on cp01/worker01/worker02
 └── roles/
     ├── proxmox_bootstrap/      # network check, API token, SSH key, firewall — staged, see below
     ├── proxmox_template/       # builds the Ubuntu 24.04 cloud-init VM template tofu/ clones from
     ├── guest_hardening/        # SSH defense-in-depth + unattended-upgrades on vpn01/cp01/worker01/worker02
+    ├── tailscale/              # Tailscale client from the signed apt repo, IP forwarding, tailnet join — vpn01 only
     ├── kubeadm_prereqs/        # containerd, kubeadm/kubelet/kubectl, swap/kernel/sysctl — all k8s nodes
     ├── kubeadm_init/           # `kubeadm init` — cp01 only
     └── kubeadm_join/           # `kubeadm join` — worker01/worker02 only
@@ -49,15 +51,11 @@ confused by an error:
    ansible-playbook ...` (from the `ansible/` directory) or
    `ANSIBLE_CONFIG=./ansible/ansible.cfg ansible-lint ansible/` (from the
    repo root).
-2. **`ansible-lint` warns about `.yamllint.yaml` being "incompatible."**
-   The repo's yamllint config (used for `kubernetes/`, CI, etc.) doesn't
-   match ansible-lint's specific opinionated YAML sub-rules
-   (`comments-indentation`, `braces.max-spaces-inside`, octal handling).
-   This is a known, accepted mismatch — loosening `.yamllint.yaml`
-   repo-wide to satisfy ansible-lint's stricter subset would weaken
-   linting for every other YAML file in the repo for no real benefit.
-   It only disables ansible-lint's `-f` auto-fix mode; it does not affect
-   pass/fail.
+2. **Both linters share one YAML config.** `.yamllint.yaml` is kept
+   compatible with ansible-lint's own YAML rules, so `yamllint` and
+   `ansible-lint` agree and no "incompatible configuration" warning
+   appears. Run `ANSIBLE_CONFIG=./ansible/ansible.cfg ansible-lint` from
+   the repo root.
 
 If mise-managed tools aren't found in a non-interactive shell (`command
 not found` despite `make doctor` showing them installed), the shell isn't
@@ -165,3 +163,33 @@ see `roles/proxmox_bootstrap/tasks/api_token.yml`); `kubeadm_init` failed
 on a default-disabled containerd CRI plugin shipped by the `containerd.io`
 apt package (see `roles/kubeadm_prereqs/tasks/containerd.yml`). See
 [`../STATUS.md`](../STATUS.md).
+
+## Tailscale gateway (`vpn01`)
+
+`playbooks/tailscale.yml` turns `vpn01` into a Tailscale subnet router. The
+tailnet side is configured once in the Tailscale admin console (identity
+provider with MFA, `tag:vpn` in `tagOwners`, `autoApprovers` for the routes, a
+policy that limits access to management ports). That policy names real
+addresses and is not kept in this repository.
+
+1. Put the routes to advertise in the gitignored
+   `inventories/production/group_vars/vpn_gateway.yml` (copy the `.example`).
+   Prefer `/32` routes for the hosts you administer over a whole LAN.
+2. Generate a single-use, tagged, short-lived auth key in the console and put
+   it in a root-only file on the machine running Ansible, never on a command
+   line: `read -rs k; umask 077; printf '%s' "$k" > ~/.ts-authkey; unset k`.
+3. Dry run, then apply (the key file is only read while the host is not yet
+   in the tailnet):
+
+   ```bash
+   ansible-playbook -i inventories/production/hosts.yml playbooks/tailscale.yml \
+     --private-key ~/.ssh/homelab_admin_ed25519 --check --diff
+   TS_AUTHKEY_FILE=~/.ts-authkey ansible-playbook -i inventories/production/hosts.yml \
+     playbooks/tailscale.yml --private-key ~/.ssh/homelab_admin_ed25519
+   ```
+
+4. Delete the key file. Re-running the playbook later keeps the advertised
+   routes in sync without needing a key.
+
+`-e tailscale_join=false` installs and configures without joining a tailnet.
+The role is covered by `scripts/test-roles.sh`, which never joins.

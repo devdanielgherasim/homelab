@@ -126,6 +126,28 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
     over-provisioned).
 - [ ] 16. Tailscale on `vpn01` + subnet router; then restrict Proxmox UI / API
   to the VPN.
+  - DONE 2026-09-19: role `ansible/roles/tailscale`, playbook, inventory group
+    `vpn_gateway`, container test (`scripts/test-roles.sh`, both roles), applied
+    to `vpn01`. Joined the tailnet with a single-use `tag:vpn` key read from a
+    root-only file (`TS_AUTHKEY_FILE`); the key is removed from the VM by the
+    role and the controller-side file was deleted. Verified on the host:
+    Running, four /32 routes advertised and auto-approved, `--check` re-run
+    `changed=0`.
+  - Bug found and fixed by the container test: after adding a repo the apt
+    cache must be refreshed even if it is recent.
+  - Client check: the owner confirmed from a phone outside the LAN that it
+    works (2026-09-19).
+  - DEFERRED, needs design (not a one-line change): making the VPN the only
+    management path. Proxmox allows the local subnet to reach 8006/22 through
+    a built-in management ipset even under policy_in DROP, so narrowing
+    `proxmox_bootstrap_firewall_allowed_mgmt_cidrs` alone does not close the
+    LAN; the cluster-level `management` ipset would need to be set, and the
+    Kubernetes nodes have no host firewall. Segmentation (task 17) is the
+    right fix. Verify the Proxmox behaviour against the PVE firewall docs
+    before implementing. Caveat: on the home LAN, clients that accept the /32
+    routes may hairpin through vpn01.
+  - Also open: TOTP two-factor on the Proxmox web UI (manual, in the UI) and
+    checking that the router forwards no management ports (manual).
 - [ ] 17. Network segmentation (VLAN or bridges) per `networking.md`.
 - [ ] 18. DR: etcd snapshot CronJob/systemd timer, Proxmox `vzdump` schedule,
   a tested restore, and the `docs/runbooks/` entries that come from it.
@@ -140,26 +162,18 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
 
 ## Resume notes
 
-Tasks 1-10, 15 done; 20 partial. Cilium is live (see task 15). New findings
-recorded in STATUS.md: `qemu-guest-agent` is not running in the VMs; the
-`local-lvm` thin pool is over-provisioned with no autoextend threshold; Hubble
-Relay TLS is off; Cilium 1.20.2 runs on an untested Kubernetes minor.
+Tasks 1-10, 15, 16 done (vpn01 joined; owner confirmed the tunnel works from a
+phone; making the VPN the only path is deferred to task 17); 20 partial.
 
-Kubeconfig for the cluster is in WSL at `~/.kube/homelab.conf` (outside the
-repo, mode 600). CLI tools: `cilium` v0.20.0 in `~/.local/bin` (WSL). Run
-`kubectl`/`helm` from inside the repo directory so mise resolves the pinned
-versions.
+Two Cilium commits are local and unpushed; the tailscale role, test refactor
+and docs are uncommitted. Pushing needs the user's go-ahead.
 
-Uncommitted: the Cilium values/README, ADR-0005 -> Accepted, STATUS.md,
-overview/kubernetes docs, the CI/Makefile change that lets kubeconform skip
-Helm values files, and this plan. Pushing needs the user's go-ahead.
+Known Windows quirk: Norton Web Shield intercepts TLS to the API server, so
+kubectl on Windows fails with x509 while Lens works and WSL works. Not a
+cluster problem; do not use insecure-skip-tls-verify.
 
-Waiting on the user: Tailscale account (MFA) and auth key for task 16;
-`PROXMOX_VE_*` in the local shell for a real `tofu plan` (task 14).
-
-Next action: commit + push (with approval), then task 16 (Tailscale role,
-no key in Git). Code-only work still open: 11, 12, 13, 14, 18; also get the
-guest agent running in the VMs (needs a package/service fix, not just a flag).
+Waiting on the user: `PROXMOX_VE_*` for a real `tofu plan`. Code-only work still open: 11, 12, 13,
+14, 18 (18, backup/DR, is the most valuable: there are no backups today).
 
 ## Verification
 
