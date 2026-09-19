@@ -1,6 +1,6 @@
 # 0002. Ubuntu Server 24.04 LTS as guest OS
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-15
 
 ## Context

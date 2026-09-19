@@ -1,6 +1,6 @@
 # 0004. OpenTofu instead of Terraform
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-15
 
 ## Context

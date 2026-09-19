@@ -19,5 +19,9 @@ Each entry (`docs/troubleshooting/<slug>.md`):
 
 ## Current entries
 
-None yet — no infrastructure has been deployed. See
-[`STATUS.md`](../../STATUS.md).
+| Entry | Area | One-line summary |
+|---|---|---|
+| [`proxmox-api-token-403-privsep.md`](proxmox-api-token-403-privsep.md) | Proxmox RBAC / OpenTofu | Token with `--privsep 1` has the intersection of user and token ACLs; three separate 403s on clone |
+| [`pmxcfs-template-not-permitted.md`](pmxcfs-template-not-permitted.md) | Proxmox / Ansible | `template` cannot write to `/etc/pve` (pmxcfs); render to `/tmp`, then `cp` |
+| [`containerd-cri-disabled-by-package.md`](containerd-cri-disabled-by-package.md) | Kubernetes bootstrap | `containerd.io` ships `disabled_plugins = ["cri"]`; `kubeadm init` fails preflight |
+| [`ansible-derived-private-key-path.md`](ansible-derived-private-key-path.md) | Ansible | A regex-derived key path silently pointed at the `.pub` file |

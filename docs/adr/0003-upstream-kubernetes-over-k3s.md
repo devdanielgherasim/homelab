@@ -1,6 +1,6 @@
 # 0003. Upstream Kubernetes (kubeadm) over k3s/managed distros
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-15
 
 ## Context

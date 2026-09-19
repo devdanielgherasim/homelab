@@ -1,6 +1,6 @@
 # 0001. Proxmox VE as hypervisor
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-15
 
 ## Context
