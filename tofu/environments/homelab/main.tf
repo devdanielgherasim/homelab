@@ -43,19 +43,22 @@ module "cp01" {
   tags            = ["homelab", "control-plane"]
 }
 
-module "worker01" {
-  source = "../../modules/proxmox-vm"
+# The worker pool. One module instance per entry of var.workers, so adding or
+# removing a worker is a change to that map and nothing else.
+module "workers" {
+  source   = "../../modules/proxmox-vm"
+  for_each = var.workers
 
-  name      = "worker01"
-  vmid      = 103
+  name      = each.key
+  vmid      = each.value.vmid
   node_name = var.proxmox_node_name
   pool_id   = var.proxmox_pool
 
-  cores     = 2
-  memory    = 3584 # 3-3.5GB range per infrastructure.md
-  disk_size = 64
+  cores     = each.value.cores
+  memory    = each.value.memory
+  disk_size = each.value.disk_size
 
-  ip_address = var.worker01_ip
+  ip_address = each.value.ip_address
   gateway    = var.network_gateway
 
   ssh_public_keys = var.ssh_public_keys
@@ -63,22 +66,16 @@ module "worker01" {
   tags            = ["homelab", "worker"]
 }
 
-module "worker02" {
-  source = "../../modules/proxmox-vm"
+# The two workers used to be separate module calls. These tell OpenTofu that the
+# existing VMs are the same objects at their new addresses, so the refactor
+# moves state and does not recreate anything. They can be deleted once the move
+# has been applied everywhere.
+moved {
+  from = module.worker01
+  to   = module.workers["worker01"]
+}
 
-  name      = "worker02"
-  vmid      = 104
-  node_name = var.proxmox_node_name
-  pool_id   = var.proxmox_pool
-
-  cores     = 2
-  memory    = 3584
-  disk_size = 64
-
-  ip_address = var.worker02_ip
-  gateway    = var.network_gateway
-
-  ssh_public_keys = var.ssh_public_keys
-  dns_servers     = var.dns_servers
-  tags            = ["homelab", "worker"]
+moved {
+  from = module.worker02
+  to   = module.workers["worker02"]
 }

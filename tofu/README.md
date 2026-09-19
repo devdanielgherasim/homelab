@@ -17,6 +17,25 @@ tofu/
     └── homelab/              # clones vpn01/cp01/worker01/worker02 — see its own README below
 ```
 
+## The worker pool
+
+`var.workers` (a map in `terraform.tfvars`, gitignored) is the whole definition of
+the workers: one entry per worker, with its VMID and address, and optional
+`cores`, `memory` and `disk_size` (defaults: 2 cores, 3584 MB, 64 GB). Adding an
+entry adds a worker; removing one removes it. Validation rejects a duplicate VMID
+or address, a VMID outside 103-199, and a badly formed address. The VMs are one
+`for_each` module call, so nothing else in the code changes.
+
+The `nodes` output lists every VM with its role, VMID and address.
+`ansible/inventories/production/tofu_inventory.py` builds the Ansible inventory
+from it, and the Ansible roles derive the pool members and the boot order from
+that inventory, so a new worker needs no edit in Ansible either. Check the sum of
+VM memory against the host's RAM before adding one.
+
+Removing a worker: drain it and delete the node from Kubernetes first, set its
+`protection` to false and apply that, then remove the entry. Removal is a
+destroy, and follows the destructive-action policy in `AGENTS.md`.
+
 ## Prerequisite: the cloud-init template
 
 This directory clones VMs — it doesn't build the base image. Run

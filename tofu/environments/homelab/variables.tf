@@ -55,12 +55,46 @@ variable "cp01_ip" {
   type        = string
 }
 
-variable "worker01_ip" {
-  description = "worker01's static IPv4 address in CIDR form."
-  type        = string
-}
+variable "workers" {
+  description = <<-EOT
+    Kubernetes worker nodes, keyed by VM name. Adding an entry adds a worker;
+    removing one removes it (drain it first, and clear its `protection` flag
+    before the removal is applied). Workers hold no state and are rebuilt from
+    Git, so this map is the whole definition of the worker pool.
 
-variable "worker02_ip" {
-  description = "worker02's static IPv4 address in CIDR form."
-  type        = string
+    Sizing defaults match docs/architecture/infrastructure.md. The host has
+    about 16 GB of RAM in total: check the sum of all VM memory before adding one.
+  EOT
+  type = map(object({
+    vmid       = number
+    ip_address = string # IPv4 in CIDR form
+    cores      = optional(number, 2)
+    memory     = optional(number, 3584) # MB
+    disk_size  = optional(number, 64)   # GB
+  }))
+
+  validation {
+    condition     = alltrue([for name, w in var.workers : can(regex("^[a-z][a-z0-9-]*[0-9]$", name))])
+    error_message = "Worker names must be lowercase letters, digits and hyphens, and end in a digit (for example worker03)."
+  }
+
+  validation {
+    condition     = alltrue([for name, w in var.workers : w.vmid >= 103 && w.vmid <= 199])
+    error_message = "Worker VMIDs must be in 103-199 (101 and 102 belong to vpn01 and cp01, the 9000s to templates)."
+  }
+
+  validation {
+    condition     = length(distinct([for name, w in var.workers : w.vmid])) == length(var.workers)
+    error_message = "Every worker needs its own VMID."
+  }
+
+  validation {
+    condition     = length(distinct([for name, w in var.workers : w.ip_address])) == length(var.workers)
+    error_message = "Every worker needs its own IP address."
+  }
+
+  validation {
+    condition     = alltrue([for name, w in var.workers : can(cidrhost(w.ip_address, 0))])
+    error_message = "Worker ip_address must be an IPv4 address in CIDR form, for example 10.10.10.13/24."
+  }
 }

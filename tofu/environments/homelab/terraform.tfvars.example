@@ -16,5 +16,11 @@ ssh_public_keys = [
 network_gateway = "10.10.10.1"
 vpn01_ip        = "10.10.10.11/24"
 cp01_ip         = "10.10.10.12/24"
-worker01_ip     = "10.10.10.13/24"
-worker02_ip     = "10.10.10.14/24"
+
+# The worker pool. Add an entry to add a worker (see docs/runbooks/scale-workers.md
+# once it exists); memory, cores and disk_size are optional and default to
+# 3584 MB, 2 cores and 64 GB.
+workers = {
+  worker01 = { vmid = 103, ip_address = "10.10.10.13/24" }
+  worker02 = { vmid = 104, ip_address = "10.10.10.14/24" }
+}
