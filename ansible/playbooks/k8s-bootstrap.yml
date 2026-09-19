@@ -33,3 +33,11 @@
   gather_facts: true
   roles:
     - kubeadm_join
+
+# Runs last so that the files it protects (created by init and join) exist.
+- name: Restrict kubelet files to root (CIS 4.1.x)
+  hosts: k8s_nodes
+  become: true
+  gather_facts: false
+  roles:
+    - kubelet_hardening

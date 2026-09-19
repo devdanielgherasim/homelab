@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Managed by ansible/roles/etcd_backup — do not edit by hand.
 #
-# Takes a verified etcd snapshot plus an archive of the cluster PKI (a restore
-# needs both: the snapshot holds the data, the PKI holds the identity), then
-# prunes old copies. A snapshot that fails verification is discarded, so the
+# Takes a verified etcd snapshot plus an archive of the cluster PKI and of the
+# Secret-encryption key (a restore needs all of them: the snapshot holds the
+# data, the PKI the identity, and without the encryption key the Secrets in a
+# restored snapshot cannot be read), then prunes old copies. A snapshot that fails verification is discarded, so the
 # newest file in the backup directory is always a usable one.
 #
 # Every path and tool can be overridden through the environment, which is how
@@ -16,6 +17,7 @@ KEEP="${KEEP:-{{ etcd_backup_keep }}}"
 ETCDCTL="${ETCDCTL:-/usr/local/bin/etcdctl}"
 ETCDUTL="${ETCDUTL:-/usr/local/bin/etcdutl}"
 PKI_DIR="${PKI_DIR:-/etc/kubernetes/pki}"
+ENC_DIR="${ENC_DIR:-/etc/kubernetes/enc}"
 ENDPOINT="${ENDPOINT:-https://127.0.0.1:2379}"
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -37,7 +39,12 @@ ETCDCTL_API=3 "$ETCDCTL" \
 "$ETCDUTL" snapshot status "$partial" --write-out=json >/dev/null
 mv -- "$partial" "$snapshot"
 
-tar -C "$(dirname "$PKI_DIR")" -czf "$pki_archive" "$(basename "$PKI_DIR")"
+# The archive holds pki/ and, when Secret encryption is configured, enc/.
+archive_items=("$(basename "$PKI_DIR")")
+if [ -d "$ENC_DIR" ] && [ "$(dirname "$ENC_DIR")" = "$(dirname "$PKI_DIR")" ]; then
+  archive_items+=("$(basename "$ENC_DIR")")
+fi
+tar -C "$(dirname "$PKI_DIR")" -czf "$pki_archive" "${archive_items[@]}"
 
 # prune <glob>: keep the newest $KEEP files matching the glob.
 prune() {

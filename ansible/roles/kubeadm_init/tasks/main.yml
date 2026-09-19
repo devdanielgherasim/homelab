@@ -3,6 +3,14 @@
 # safely re-runnable, and `kubeadm reset` (the only real "undo") is
 # explicitly in AGENTS.md's destructive-action policy — this role never
 # runs it, under any condition.
+#
+# The role has two jobs that share one configuration file:
+#   * new cluster:      `kubeadm init --config` builds a hardened control plane;
+#   * running cluster:  reconcile.yml regenerates the static pods when the
+#                       configuration changed, then proves encryption at rest.
+
+- name: Render the control-plane configuration
+  ansible.builtin.import_tasks: config.yml
 
 - name: Check whether this control plane is already initialized
   ansible.builtin.stat:
@@ -10,24 +18,45 @@
   register: kubeadm_init_admin_conf
   become: true
 
-- name: Run kubeadm init (only if not already initialized)
+- name: Run kubeadm init from the configuration (only if not already initialized)
   ansible.builtin.command:
-    cmd: >
-      kubeadm init
-      --pod-network-cidr={{ kubeadm_init_pod_network_cidr }}
-      --apiserver-advertise-address={{ ansible_host }}
+    cmd: "kubeadm init --config {{ kubeadm_init_config_dir }}/kubeadm-config.yaml"
   become: true
   when: not kubeadm_init_admin_conf.stat.exists
   changed_when: true
-  register: kubeadm_init_result
+  # The output contains a join command with a token, so it is not printed.
+  no_log: true
 
-# noqa: no-handler — must display immediately after the triggering task
-# in-order (init output is only useful right when it happens), not
-# queued to end-of-play like a handler would be.
-- name: Show kubeadm init output # noqa: no-handler
-  ansible.builtin.debug:
-    var: kubeadm_init_result.stdout_lines
-  when: kubeadm_init_result is changed
+- name: Bring a running control plane in line with the configuration
+  ansible.builtin.import_tasks: reconcile.yml
+  when: kubeadm_init_admin_conf.stat.exists
+
+- name: Check whether etcd's data directory exists
+  ansible.builtin.stat:
+    path: /var/lib/etcd
+  register: kubeadm_init_etcd_dir
+  become: true
+
+- name: Create a dedicated etcd account
+  # CIS 1.1.12: the data directory should belong to a dedicated user. The etcd
+  # static pod still runs as root, which can read it either way.
+  ansible.builtin.user:
+    name: etcd
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  become: true
+
+- name: Give the etcd data directory to that account
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: directory
+    owner: etcd
+    group: etcd
+    mode: "0700"
+    recurse: true
+  become: true
+  when: kubeadm_init_etcd_dir.stat.exists
 
 - name: Ensure ~/.kube exists for the ubuntu user
   ansible.builtin.file:
@@ -51,22 +80,24 @@
 # Always (re)create a join token, whether or not init just ran — token
 # creation is safe/idempotent (short-lived credential, not cluster
 # state), and kubeadm_join needs one available via hostvars regardless of
-# whether this is a first run or a later re-run adding/fixing a worker.
-- name: Create a fresh join command
+# whether this is a first run or a later re-run adding/fixing a worker. A short
+# lifetime keeps unused tokens from accumulating as standing credentials.
+- name: Create a fresh, short-lived join command
   ansible.builtin.command:
-    cmd: kubeadm token create --print-join-command
+    cmd: kubeadm token create --ttl 30m --print-join-command
   become: true
   changed_when: true
+  no_log: true
   register: kubeadm_init_join_command_result
 
 - name: Expose the join command to other hosts in this playbook run
   ansible.builtin.set_fact:
-    kubeadm_init_join_command: "{{ kubeadm_init_join_command_result.stdout }}"
+    kubeadm_init_join_command: "{{ kubeadm_init_join_command_result.stdout | default('') }}"
+  no_log: true
 
-- name: Reminder — NotReady is expected until a CNI is installed
+- name: Reminder — nodes stay NotReady until a CNI is installed
   ansible.builtin.debug:
     msg: >-
-      Control plane ready. Node(s) will show NotReady in `kubectl get
-      nodes` until Cilium (or another CNI) is installed — that's
-      expected, not a failure of this role. See
-      docs/architecture/kubernetes.md.
+      Control plane ready. On a new cluster, nodes stay NotReady until Cilium
+      is installed (kubernetes/bootstrap/cilium) — that is expected, not a
+      failure of this role.

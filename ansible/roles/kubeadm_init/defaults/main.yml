@@ -2,3 +2,37 @@
 # Kept in sync with kubeadm_prereqs and docs/architecture/networking.md's
 # documented Cilium pod CIDR.
 kubeadm_init_pod_network_cidr: "10.244.0.0/16"
+
+# Must be a patch release of the minor installed by kubeadm_prereqs
+# (kubeadm_prereqs_k8s_minor_version) — kubeadm refuses a newer target.
+kubeadm_init_kubernetes_version: "1.37.0"
+
+# Cilium replaces kube-proxy (kubernetes/bootstrap/cilium), so a fresh cluster
+# is created without it. Set to false only for a cluster that keeps kube-proxy.
+kubeadm_init_skip_kube_proxy: true
+
+# Stable API endpoint for the control plane (DNS name or address:port). Empty
+# keeps the node address, which is fine with a single control plane; set it
+# BEFORE the first init if a second control plane will ever be added, because
+# it cannot be changed cheaply afterwards.
+kubeadm_init_control_plane_endpoint: ""
+
+# --- API server hardening (CIS Kubernetes Benchmark) -------------------------
+kubeadm_init_config_dir: /etc/kubernetes
+kubeadm_init_audit_log_dir: /var/log/kubernetes/audit
+kubeadm_init_audit_log_maxage: 30
+kubeadm_init_audit_log_maxbackup: 10
+kubeadm_init_audit_log_maxsize: 100
+
+# Pod Security Admission defaults for namespaces without their own labels.
+# kube-system is exempt because the CNI and other platform components need
+# privileges. Namespaces that need more (a load balancer, a service mesh) get
+# an explicit pod-security.kubernetes.io/enforce label instead of a wider default.
+kubeadm_init_pod_security_enforce: baseline
+kubeadm_init_pod_security_warn_audit: restricted
+kubeadm_init_pod_security_exempt_namespaces:
+  - kube-system
+
+# How long to wait for the API server after its static pod is regenerated.
+kubeadm_init_apiserver_wait_retries: 40
+kubeadm_init_apiserver_wait_delay: 5

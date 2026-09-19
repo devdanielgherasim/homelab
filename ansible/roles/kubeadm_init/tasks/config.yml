@@ -1,0 +1,91 @@
+---
+# Renders everything the control plane is configured from. Runs on every play
+# (before init on a new cluster, before reconciliation on a running one) and
+# only reports a change when the content really differs.
+
+- name: Create the encryption and audit directories (root only)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ kubeadm_init_config_dir }}/enc"
+    - "{{ kubeadm_init_audit_log_dir }}"
+  become: true
+
+- name: Check whether an encryption key already exists
+  ansible.builtin.stat:
+    path: "{{ kubeadm_init_config_dir }}/enc/encryption-config.yaml"
+  become: true
+  register: kubeadm_init_encryption_config
+
+- name: Generate an encryption key on this node (only when none exists)
+  # 32 random bytes, generated where they will live. Never produced on the
+  # controller, never in Git, never printed. An existing key is never replaced
+  # or rotated implicitly: replacing it would make stored Secrets unreadable.
+  ansible.builtin.command:
+    cmd: openssl rand -base64 32
+  become: true
+  changed_when: false
+  check_mode: false
+  no_log: true
+  register: kubeadm_init_new_key
+  when: not kubeadm_init_encryption_config.stat.exists
+
+- name: Write the encryption configuration (never overwrites an existing one)
+  ansible.builtin.copy:
+    dest: "{{ kubeadm_init_config_dir }}/enc/encryption-config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+    content: |
+      apiVersion: apiserver.config.k8s.io/v1
+      kind: EncryptionConfiguration
+      resources:
+        - resources:
+            - secrets
+          providers:
+            # secretbox (XSalsa20-Poly1305) is the recommended local provider;
+            # aescbc is discouraged upstream. `identity` stays last so data
+            # written before encryption was enabled can still be read.
+            - secretbox:
+                keys:
+                  - name: key1
+                    secret: {{ kubeadm_init_new_key.stdout | default('') | trim }}
+            - identity: {}
+  become: true
+  no_log: true
+  when: not kubeadm_init_encryption_config.stat.exists
+
+- name: Render the audit policy, admission configuration and kubeadm config
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ kubeadm_init_config_dir }}/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - { src: audit-policy.yaml.j2, dest: audit-policy.yaml }
+    - { src: admission-config.yaml.j2, dest: admission-config.yaml }
+    - { src: kubeadm-config.yaml.j2, dest: kubeadm-config.yaml }
+  loop_control:
+    label: "{{ item.dest }}"
+  become: true
+  register: kubeadm_init_rendered
+
+- name: Note whether any control-plane input changed
+  ansible.builtin.set_fact:
+    kubeadm_init_inputs_changed: "{{ kubeadm_init_rendered.results | map(attribute='changed') | select | list | length > 0 }}"
+
+- name: Validate the kubeadm configuration
+  # Catches a typo or an unsupported field before it can reach a static pod.
+  ansible.builtin.command:
+    cmd: "kubeadm config validate --config {{ kubeadm_init_config_dir }}/kubeadm-config.yaml"
+  become: true
+  changed_when: false
+  check_mode: false # read-only
+  # Under --check the files above are not written, so there is nothing to validate.
+  when: not ansible_check_mode

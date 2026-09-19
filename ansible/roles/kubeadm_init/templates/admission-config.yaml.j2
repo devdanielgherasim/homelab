@@ -1,0 +1,25 @@
+# Managed by ansible/roles/kubeadm_init — do not edit by hand.
+# Cluster-wide Pod Security Admission defaults. A namespace can override them
+# with pod-security.kubernetes.io/* labels; this only decides what happens to
+# namespaces that have none.
+apiVersion: apiserver.config.k8s.io/v1
+kind: AdmissionConfiguration
+plugins:
+  - name: PodSecurity
+    configuration:
+      apiVersion: pod-security.admission.config.k8s.io/v1
+      kind: PodSecurityConfiguration
+      defaults:
+        enforce: "{{ kubeadm_init_pod_security_enforce }}"
+        enforce-version: latest
+        audit: "{{ kubeadm_init_pod_security_warn_audit }}"
+        audit-version: latest
+        warn: "{{ kubeadm_init_pod_security_warn_audit }}"
+        warn-version: latest
+      exemptions:
+        usernames: []
+        runtimeClasses: []
+        namespaces:
+{% for namespace in kubeadm_init_pod_security_exempt_namespaces %}
+          - {{ namespace }}
+{% endfor %}

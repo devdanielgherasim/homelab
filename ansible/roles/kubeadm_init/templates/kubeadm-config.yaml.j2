@@ -1,0 +1,82 @@
+# Managed by ansible/roles/kubeadm_init — do not edit by hand.
+# Single source of truth for the control plane: `kubeadm init --config` uses it
+# for a new cluster, and `kubeadm init phase control-plane all --config`
+# applies it to a running one. Based on the ClusterConfiguration of the live
+# cluster, so a rebuild produces the same shape.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ ansible_host }}
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+{% if kubeadm_init_skip_kube_proxy %}
+skipPhases:
+  - addon/kube-proxy
+{% endif %}
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+clusterName: kubernetes
+kubernetesVersion: v{{ kubeadm_init_kubernetes_version }}
+{% if kubeadm_init_control_plane_endpoint | length > 0 %}
+controlPlaneEndpoint: "{{ kubeadm_init_control_plane_endpoint }}"
+{% endif %}
+networking:
+  dnsDomain: cluster.local
+  podSubnet: {{ kubeadm_init_pod_network_cidr }}
+  serviceSubnet: 10.96.0.0/12
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+apiServer:
+  extraArgs:
+    # Secrets are encrypted in etcd. The key lives only on this node (and in
+    # the etcd backup archive), never in Git.
+    - name: encryption-provider-config
+      value: {{ kubeadm_init_config_dir }}/enc/encryption-config.yaml
+    - name: audit-policy-file
+      value: {{ kubeadm_init_config_dir }}/audit-policy.yaml
+    - name: audit-log-path
+      value: {{ kubeadm_init_audit_log_dir }}/audit.log
+    - name: audit-log-maxage
+      value: "{{ kubeadm_init_audit_log_maxage }}"
+    - name: audit-log-maxbackup
+      value: "{{ kubeadm_init_audit_log_maxbackup }}"
+    - name: audit-log-maxsize
+      value: "{{ kubeadm_init_audit_log_maxsize }}"
+    - name: admission-control-config-file
+      value: {{ kubeadm_init_config_dir }}/admission-config.yaml
+    - name: profiling
+      value: "false"
+    - name: service-account-extend-token-expiration
+      value: "false"
+  extraVolumes:
+    - name: encryption-config
+      hostPath: {{ kubeadm_init_config_dir }}/enc
+      mountPath: {{ kubeadm_init_config_dir }}/enc
+      readOnly: true
+      pathType: Directory
+    - name: audit-policy
+      hostPath: {{ kubeadm_init_config_dir }}/audit-policy.yaml
+      mountPath: {{ kubeadm_init_config_dir }}/audit-policy.yaml
+      readOnly: true
+      pathType: File
+    - name: admission-config
+      hostPath: {{ kubeadm_init_config_dir }}/admission-config.yaml
+      mountPath: {{ kubeadm_init_config_dir }}/admission-config.yaml
+      readOnly: true
+      pathType: File
+    - name: audit-log
+      hostPath: {{ kubeadm_init_audit_log_dir }}
+      mountPath: {{ kubeadm_init_audit_log_dir }}
+      readOnly: false
+      pathType: DirectoryOrCreate
+controllerManager:
+  extraArgs:
+    - name: profiling
+      value: "false"
+scheduler:
+  extraArgs:
+    - name: profiling
+      value: "false"

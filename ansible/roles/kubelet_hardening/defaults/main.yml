@@ -1,0 +1,7 @@
+---
+kubelet_hardening_files:
+  - /var/lib/kubelet/config.yaml
+  - /etc/kubernetes/kubelet.conf
+  - /usr/lib/systemd/system/kubelet.service
+  - /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+  - /etc/systemd/system/kubelet.service.d/10-kubeadm.conf

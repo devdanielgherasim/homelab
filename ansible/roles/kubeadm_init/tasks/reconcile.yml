@@ -1,0 +1,159 @@
+---
+# Brings an already-initialized control plane in line with kubeadm-config.yaml.
+# Only runs when the config inputs changed or the running static pods lack the
+# hardened flags. Regenerating the manifests restarts the API server, the
+# controller manager and the scheduler; workloads keep running, and the API is
+# unavailable for a short time. The old manifests are backed up first.
+
+- name: Check the running static pods for the hardened flags
+  ansible.builtin.command:
+    cmd: "grep -q -- {{ item.flag }} /etc/kubernetes/manifests/{{ item.manifest }}"
+  loop:
+    - { manifest: kube-apiserver.yaml, flag: --encryption-provider-config }
+    - { manifest: kube-apiserver.yaml, flag: --audit-log-path }
+    - { manifest: kube-apiserver.yaml, flag: --admission-control-config-file }
+    - { manifest: kube-controller-manager.yaml, flag: --profiling=false }
+    - { manifest: kube-scheduler.yaml, flag: --profiling=false }
+  loop_control:
+    label: "{{ item.manifest }} {{ item.flag }}"
+  become: true
+  changed_when: false
+  failed_when: false
+  check_mode: false # read-only
+  register: kubeadm_init_flag_checks
+
+- name: Decide whether the control plane needs to be regenerated
+  ansible.builtin.set_fact:
+    kubeadm_init_needs_reconcile: >-
+      {{ kubeadm_init_inputs_changed | bool
+         or (kubeadm_init_flag_checks.results | map(attribute='rc') | select('ne', 0) | list | length > 0) }}
+
+- name: Regenerate the control plane from the configuration
+  when: kubeadm_init_needs_reconcile | bool
+  block:
+    - name: Create the manifest backup directory
+      ansible.builtin.file:
+        path: /var/backups/kubeadm
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      become: true
+
+    - name: Fix the backup location for this run
+      ansible.builtin.set_fact:
+        kubeadm_init_manifest_backup: "/var/backups/kubeadm/manifests-{{ ansible_facts.date_time.epoch }}"
+
+    - name: Back up the current static pod manifests
+      ansible.builtin.command:
+        cmd: "cp -a /etc/kubernetes/manifests {{ kubeadm_init_manifest_backup }}"
+        creates: "{{ kubeadm_init_manifest_backup }}"
+      become: true
+
+    # Everything up to and including "the API server is back" can be undone by
+    # restoring the old manifests, so a failure here rolls back automatically.
+    # Nothing is re-encrypted yet, so no Secret depends on the new key.
+    - name: Start the hardened API server, with automatic rollback
+      block:
+        - name: Regenerate the API server, controller manager and scheduler manifests
+          ansible.builtin.command:
+            cmd: "kubeadm init phase control-plane all --config {{ kubeadm_init_config_dir }}/kubeadm-config.yaml"
+          become: true
+          changed_when: true
+
+        - name: Wait until the API server runs with the new flags and is ready
+          # The mirror pod only reflects the new command line after the static
+          # pod restarted, so this cannot pass against the old process.
+          ansible.builtin.shell:
+            cmd: |
+              set -o pipefail
+              kubectl --kubeconfig /etc/kubernetes/admin.conf -n kube-system get pod \
+                -l component=kube-apiserver -o jsonpath='{.items[0].spec.containers[0].command}' \
+                | grep -q -- --encryption-provider-config \
+              && kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw=/readyz >/dev/null
+            executable: /bin/bash
+          become: true
+          changed_when: false
+          register: kubeadm_init_apiserver_ready
+          until: kubeadm_init_apiserver_ready.rc == 0
+          retries: "{{ kubeadm_init_apiserver_wait_retries }}"
+          delay: "{{ kubeadm_init_apiserver_wait_delay }}"
+      rescue:
+        - name: Restore the previous static pod manifests
+          ansible.builtin.command:
+            cmd: "cp -a {{ kubeadm_init_manifest_backup }}/. /etc/kubernetes/manifests/"
+          become: true
+          changed_when: true
+
+        - name: Stop, so the failure is looked at instead of retried blindly
+          ansible.builtin.fail:
+            msg: >-
+              The hardened API server did not become ready. The previous
+              manifests were restored from {{ kubeadm_init_manifest_backup }}
+              and the kubelet is restarting the old pods. Check
+              `crictl ps -a` and `journalctl -u kubelet` on the node before
+              trying again.
+
+    # Past this point the new key is in use, so the old manifests must NOT be
+    # restored automatically: Secrets written from now on are encrypted, and an
+    # apiserver without the provider could not read them.
+    - name: Store the configuration in the cluster so `kubeadm upgrade` keeps it
+      ansible.builtin.command:
+        cmd: "kubeadm init phase upload-config kubeadm --config {{ kubeadm_init_config_dir }}/kubeadm-config.yaml"
+      become: true
+      changed_when: true
+
+    - name: Re-encrypt existing Secrets with the new key
+      # Reading every Secret and writing it back makes the API server store it
+      # encrypted; until then old Secrets stay in plaintext in etcd.
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          kubectl --kubeconfig /etc/kubernetes/admin.conf get secrets --all-namespaces -o json \
+            | kubectl --kubeconfig /etc/kubernetes/admin.conf replace -f -
+        executable: /bin/bash
+      become: true
+      changed_when: true
+      no_log: true # would list every Secret's content otherwise
+
+- name: Pick a Secret to prove encryption at rest
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig /etc/kubernetes/admin.conf -n kube-system
+      get secrets -o jsonpath='{.items[0].metadata.name}'
+  become: true
+  changed_when: false
+  check_mode: false
+  register: kubeadm_init_probe_secret
+
+- name: Read that Secret straight from etcd and look for the encryption prefix
+  # Bypasses the API server on purpose: the API returns decrypted data, etcd
+  # holds what is really stored on disk.
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      kubectl --kubeconfig /etc/kubernetes/admin.conf -n kube-system exec etcd-{{ ansible_facts.hostname }} -- \
+        etcdctl --endpoints=https://127.0.0.1:2379 \
+          --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+          --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+          --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
+          get /registry/secrets/kube-system/{{ kubeadm_init_probe_secret.stdout }} --print-value-only \
+        | grep -a -c 'k8s:enc:secretbox:v1:key1'
+    executable: /bin/bash
+  become: true
+  changed_when: false
+  check_mode: false
+  # grep -c exits 1 when it counts zero; let the assertion below explain that.
+  failed_when: kubeadm_init_encryption_probe.rc > 1
+  register: kubeadm_init_encryption_probe
+
+- name: Assert Secrets are encrypted in etcd
+  # Under --check nothing was applied yet, so this would fail by design.
+  when: not ansible_check_mode
+  ansible.builtin.assert:
+    that:
+      - kubeadm_init_encryption_probe.stdout | trim == '1'
+    fail_msg: >-
+      Secret kube-system/{{ kubeadm_init_probe_secret.stdout }} is not stored
+      with the secretbox prefix in etcd. Encryption at rest is not active.
+    quiet: true

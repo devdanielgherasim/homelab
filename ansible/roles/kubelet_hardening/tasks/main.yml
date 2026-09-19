@@ -1,0 +1,24 @@
+---
+# CIS Kubernetes Benchmark 4.1.x: the kubelet's service files and configuration
+# should be readable and writable by root only. The kubelet runs as root, so
+# this changes nothing about how it works. Only files that exist are touched,
+# which lets the role run before or after kubeadm init/join.
+
+- name: Look for the kubelet files on this node
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ kubelet_hardening_files }}"
+  become: true
+  register: kubelet_hardening_stats
+
+- name: Restrict the files that exist to root
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ kubelet_hardening_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+  become: true

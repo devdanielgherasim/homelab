@@ -148,13 +148,14 @@ docker exec "$NAME" systemctl is-active --quiet etcd-snapshot.timer || fail "etc
 
 # Stand-ins for etcdctl/etcdutl and the PKI, so the script's own logic runs for real.
 docker exec "$NAME" bash -euc '
-  mkdir -p /tmp/bk/pki/etcd
+  mkdir -p /tmp/bk/pki/etcd /tmp/bk/enc
+  echo "encryption-config" > /tmp/bk/enc/encryption-config.yaml
   for f in ca.crt healthcheck-client.crt healthcheck-client.key; do echo x > /tmp/bk/pki/etcd/$f; done
   printf "#!/bin/sh\nfor a; do last=\$a; done\necho fake-snapshot > \"\$last\"\n" > /tmp/bk/etcdctl
   printf "#!/bin/sh\nexit 0\n" > /tmp/bk/etcdutl
   chmod +x /tmp/bk/etcdctl /tmp/bk/etcdutl
 '
-snapshot_env=(-e BACKUP_DIR=/tmp/bk/out -e KEEP=3 -e ETCDCTL=/tmp/bk/etcdctl -e PKI_DIR=/tmp/bk/pki)
+snapshot_env=(-e BACKUP_DIR=/tmp/bk/out -e KEEP=3 -e ETCDCTL=/tmp/bk/etcdctl -e PKI_DIR=/tmp/bk/pki -e ENC_DIR=/tmp/bk/enc)
 for _ in 1 2 3 4 5; do
   docker exec "${snapshot_env[@]}" -e ETCDUTL=/tmp/bk/etcdutl "$NAME" /usr/local/sbin/etcd-snapshot >/dev/null \
     || fail "etcd_backup: snapshot script failed"
@@ -164,6 +165,7 @@ done
   || fail "etcd_backup: retention did not keep exactly 3 snapshots"
 [ "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/pki-*.tar.gz | wc -l')" = "3" ] \
   || fail "etcd_backup: retention did not keep exactly 3 PKI archives"
+docker exec "$NAME" bash -c 'tar tzf "$(ls -1t /tmp/bk/out/pki-*.tar.gz | head -1)"' | grep -q '^enc/encryption-config.yaml$'   || fail "etcd_backup: the archive does not contain the Secret-encryption key"
 [ "$(docker exec "$NAME" stat -c %a "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/etcd-*.db | tail -1')")" = "600" ] \
   || fail "etcd_backup: snapshot is not private (mode 600)"
 

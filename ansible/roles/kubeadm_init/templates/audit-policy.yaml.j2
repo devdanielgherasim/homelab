@@ -1,0 +1,51 @@
+# Managed by ansible/roles/kubeadm_init — do not edit by hand.
+# Audit policy: rules are evaluated in order and the first match wins.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages:
+  - RequestReceived
+rules:
+  # --- Never record request or response bodies of secrets -------------------
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["secrets", "configmaps", "serviceaccounts/token"]
+      - group: authentication.k8s.io
+        resources: ["tokenreviews"]
+
+  # --- Drop high-volume noise -----------------------------------------------
+  - level: None
+    nonResourceURLs: ["/healthz*", "/livez*", "/readyz*", "/version", "/metrics", "/openapi*"]
+  - level: None
+    resources:
+      - group: ""
+        resources: ["events"]
+      - group: coordination.k8s.io
+        resources: ["leases"]
+  - level: None
+    userGroups: ["system:nodes"]
+    verbs: ["get", "list", "watch"]
+  - level: None
+    users:
+      - system:kube-controller-manager
+      - system:kube-scheduler
+      - system:apiserver
+    verbs: ["get", "list", "watch", "update"]
+
+  # --- Record in full what changes access or reaches into pods ---------------
+  - level: RequestResponse
+    resources:
+      - group: rbac.authorization.k8s.io
+        resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["create", "update", "patch", "delete"]
+  - level: Request
+    resources:
+      - group: ""
+        resources: ["pods/exec", "pods/attach", "pods/portforward", "pods/ephemeralcontainers"]
+
+  # --- Everything else that writes: the request, not the response ------------
+  - level: Request
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+
+  # --- Reads and anything left: who asked for what ---------------------------
+  - level: Metadata
