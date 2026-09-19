@@ -1,0 +1,29 @@
+---
+# Makes vpn01 a Tailscale subnet router. Prerequisites (done once, in the
+# Tailscale admin console): a tailnet with MFA on the identity provider,
+# tag:vpn in tagOwners, autoApprovers for the routes, and a single-use
+# tagged auth key. The tailnet policy holds real addresses and is not kept
+# in this repository.
+#
+# The auth key goes in a root-only file on the machine running Ansible, never
+# on the command line or in Git:
+#
+#   read -rs k; umask 077; printf '%s' "$k" > ~/.ts-authkey; unset k
+#
+# Dry run first, then the real run (the key file is only read when the host is
+# not yet in the tailnet):
+#
+#   ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/tailscale.yml --private-key ~/.ssh/homelab_admin_ed25519 --check --diff
+#   TS_AUTHKEY_FILE=~/.ts-authkey ansible-playbook -i inventories/production/hosts.yml \
+#     playbooks/tailscale.yml --private-key ~/.ssh/homelab_admin_ed25519
+#
+# Delete the key file afterwards. Changing remote-access rules is an explicit
+# human decision under AGENTS.md's destructive-action policy.
+
+- name: Configure vpn01 as a Tailscale subnet router
+  hosts: vpn_gateway
+  become: true
+  gather_facts: true
+  roles:
+    - tailscale

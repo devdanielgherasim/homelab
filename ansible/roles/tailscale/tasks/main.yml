@@ -1,0 +1,159 @@
+---
+# Turns a VM into a Tailscale subnet router: installs the client from
+# Tailscale's own apt repository, enables IP forwarding, and joins the
+# tailnet with a single-use auth key read from a file on the controller.
+#
+# The key is never stored: it is copied to a root-only tmpfs path for the
+# duration of `tailscale up` and removed afterwards, and the tasks that touch
+# it use no_log. See ansible/README.md for the full procedure.
+
+- name: Require at least one route and one tag
+  ansible.builtin.assert:
+    that:
+      - tailscale_advertise_routes | length > 0
+      - tailscale_tags | length > 0
+    fail_msg: >-
+      tailscale_advertise_routes is empty. Set it in
+      inventories/production/group_vars/vpn_gateway.yml (see the .example
+      file); a subnet router with no routes has no purpose.
+    quiet: true
+
+- name: Add the Tailscale apt repository
+  # Same approach as Docker and Kubernetes elsewhere in this repo:
+  # deb822_repository downloads and stores the signing key itself.
+  ansible.builtin.deb822_repository:
+    name: tailscale
+    types: deb
+    uris: https://pkgs.tailscale.com/stable/ubuntu
+    suites: "{{ ansible_facts.distribution_release }}"
+    components: main
+    architectures: "{{ ansible_facts.architecture | replace('x86_64', 'amd64') }}"
+    signed_by: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_facts.distribution_release }}.noarmor.gpg"
+  become: true
+  notify: Update apt cache for Tailscale
+
+# A freshly added repository is invisible to apt until the cache is refreshed,
+# and a recent cache would otherwise be considered good enough.
+- name: Refresh apt now if the repository changed
+  ansible.builtin.meta: flush_handlers
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+  become: true
+  # Under --check the repository above is not really written, so the package
+  # cannot be found yet; that is a limit of check mode, not a real failure.
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Enable IP forwarding (required for a subnet router)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-tailscale.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+  become: true
+  notify: Apply tailscale sysctl
+
+- name: Enable and start tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: true
+    state: started
+  become: true
+  ignore_errors: "{{ ansible_check_mode }}" # unit does not exist yet under --check
+
+- name: Join the tailnet and keep the advertised routes in sync
+  when: tailscale_join | bool
+  block:
+    - name: Read the current Tailscale state
+      ansible.builtin.command:
+        cmd: tailscale status --json
+      become: true
+      changed_when: false
+      failed_when: false
+      check_mode: false # read-only
+      register: tailscale_status
+
+    - name: Work out the backend state
+      ansible.builtin.set_fact:
+        tailscale_backend_state: >-
+          {{ (tailscale_status.stdout | from_json).BackendState
+             if tailscale_status.stdout is match('^\s*\{')
+             else 'Unknown' }}
+
+    - name: Join the tailnet (only when not already running)
+      when: tailscale_backend_state != 'Running'
+      block:
+        - name: Require a readable auth key file on the controller
+          ansible.builtin.stat:
+            path: "{{ tailscale_authkey_file }}"
+          delegate_to: localhost
+          become: false
+          register: tailscale_authkey_stat
+          when: tailscale_authkey_file | length > 0
+
+        - name: Fail clearly when no auth key is available
+          ansible.builtin.assert:
+            that:
+              - tailscale_authkey_file | length > 0
+              - tailscale_authkey_stat.stat.exists
+            fail_msg: >-
+              This host is not in the tailnet and no auth key file was found.
+              Put a single-use key in a file and pass its path in
+              TS_AUTHKEY_FILE (or tailscale_authkey_file). The key is never
+              read from Git or from a variable.
+            quiet: true
+
+        - name: Place the auth key on the host (root-only, removed afterwards)
+          ansible.builtin.copy:
+            content: "{{ lookup('ansible.builtin.file', tailscale_authkey_file) | trim }}"
+            dest: /run/tailscale-authkey
+            owner: root
+            group: root
+            mode: "0600"
+          become: true
+          no_log: true
+
+        - name: Bring the node up
+          ansible.builtin.command:
+            argv:
+              - tailscale
+              - up
+              - --auth-key=file:/run/tailscale-authkey
+              - "--advertise-tags={{ tailscale_tags | join(',') }}"
+              - "--advertise-routes={{ tailscale_advertise_routes | join(',') }}"
+              - --accept-dns=false
+              - "--hostname={{ inventory_hostname }}"
+          become: true
+          changed_when: true
+          no_log: true
+      always:
+        - name: Remove the auth key from the host
+          ansible.builtin.file:
+            path: /run/tailscale-authkey
+            state: absent
+          become: true
+
+    - name: Read the advertised routes
+      ansible.builtin.command:
+        cmd: tailscale debug prefs
+      become: true
+      changed_when: false
+      failed_when: false
+      check_mode: false # read-only
+      register: tailscale_prefs
+      when: tailscale_backend_state == 'Running'
+
+    - name: Update advertised routes if they differ
+      ansible.builtin.command:
+        cmd: "tailscale set --advertise-routes={{ tailscale_advertise_routes | join(',') }}"
+      become: true
+      changed_when: true
+      when:
+        - tailscale_backend_state == 'Running'
+        - tailscale_prefs.rc == 0
+        - (tailscale_prefs.stdout | from_json).AdvertiseRoutes | default([]) | sort != tailscale_advertise_routes | sort

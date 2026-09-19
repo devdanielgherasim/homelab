@@ -71,7 +71,7 @@ security: ## Local secret scan + IaC security scan
 	else echo "trivy not installed — see 'make doctor'"; fi
 
 test-roles: ## Converge-test Ansible roles in a throwaway container (needs Docker)
-	@bash scripts/test-guest-hardening.sh
+	@bash scripts/test-roles.sh
 
 drift: ## Report drift between declared (Git) and actual infra state — non-mutating
 	@if [ -z "$$(find tofu -mindepth 2 -name '*.tf' 2>/dev/null)" ]; then \

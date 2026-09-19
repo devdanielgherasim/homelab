@@ -1,0 +1,11 @@
+# Copy to vpn_gateway.yml (same dir) and fill in your real addresses.
+# Gitignored — never commit the real file. See docs/security/public-repository.md.
+
+# Routes vpn01 advertises to the tailnet. Prefer /32 routes for just the hosts
+# you administer remotely, instead of a whole LAN. They must match the
+# autoApprovers block in the tailnet policy.
+tailscale_advertise_routes:
+  - "10.10.10.10/32"   # Proxmox host
+  - "10.10.20.11/32"   # cp01
+  - "10.10.20.12/32"   # worker01
+  - "10.10.20.13/32"   # worker02

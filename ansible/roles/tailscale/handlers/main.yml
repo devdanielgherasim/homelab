@@ -1,0 +1,11 @@
+---
+- name: Update apt cache for Tailscale
+  ansible.builtin.apt:
+    update_cache: true
+  become: true
+
+- name: Apply tailscale sysctl
+  ansible.builtin.command:
+    cmd: sysctl -p /etc/sysctl.d/99-tailscale.conf
+  become: true
+  changed_when: true

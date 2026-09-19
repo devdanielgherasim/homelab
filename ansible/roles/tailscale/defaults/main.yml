@@ -1,0 +1,19 @@
+---
+# Routes vpn01 advertises to the tailnet. Real addresses are network topology
+# and stay out of Git: set this in the gitignored
+# inventories/production/group_vars/vpn_gateway.yml (see the .example file).
+# Prefer /32 routes for just the hosts that are administered remotely over
+# advertising a whole LAN.
+tailscale_advertise_routes: []
+
+# The tag must be allowed in the tailnet policy (tagOwners) and is what lets
+# the policy auto-approve the routes above.
+tailscale_tags:
+  - tag:vpn
+
+# Path, on the machine running Ansible, of a file holding a single-use auth
+# key. Never a key in a variable or in Git. Only read while joining.
+tailscale_authkey_file: "{{ lookup('ansible.builtin.env', 'TS_AUTHKEY_FILE') }}"
+
+# false = install and configure only, never join (used by the container test).
+tailscale_join: true

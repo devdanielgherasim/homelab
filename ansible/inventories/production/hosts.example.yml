@@ -39,3 +39,10 @@ k8s_nodes:
   children:
     k8s_control_plane: {}
     k8s_workers: {}
+
+# Tailscale subnet router (vpn01 only). vpn01's address comes from
+# homelab_vms above; the routes it advertises live in
+# group_vars/vpn_gateway.yml (copy vpn_gateway.yml.example).
+vpn_gateway:
+  hosts:
+    vpn01: {}
