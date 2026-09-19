@@ -10,7 +10,7 @@
 # (separate, later step) — that's expected, not a failure here.
 #
 # Example:
-#   ansible-playbook -i inventories/production/hosts.yml \
+#   ansible-playbook -i inventories/production/ \
 #     playbooks/k8s-bootstrap.yml --private-key ~/.ssh/homelab_admin_ed25519
 
 - name: Install containerd + kubeadm/kubelet/kubectl on all k8s nodes

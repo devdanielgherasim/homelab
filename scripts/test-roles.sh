@@ -6,6 +6,8 @@
 # the intended state, a second run changes nothing (idempotence), and its safety
 # checks refuse bad input.
 #
+#   tofu_inventory   builds the groups and host variables from OpenTofu's `nodes` output,
+#                    shows a new worker with no other edit, rejects an unknown role.
 #   guest_hardening  beats a cloud-init drop-in, is idempotent, refuses a lock-out.
 #   tailscale        installs from the signed repo, enables forwarding, is idempotent,
 #                    refuses to run without routes. It never joins a tailnet here.
@@ -88,6 +90,32 @@ docker exec "$NAME" bash -euc "
   pip install --break-system-packages -q 'ansible-core==${ANSIBLE_CORE_VERSION}'
   printf '[homelab_vms]\nlocalhost ansible_connection=local ansible_user=ubuntu\n[vpn_gateway]\nlocalhost ansible_connection=local ansible_user=ubuntu\n[k8s_control_plane]\nlocalhost ansible_connection=local ansible_user=ubuntu\n' > /tmp/inv.ini
 "
+
+# --------------------------------------------------------------- tofu_inventory
+echo "== tofu_inventory"
+inventory_json='{
+  "vpn01":    {"role": "vpn",           "vm_id": 101, "ip_address": "10.0.0.11/24"},
+  "cp01":     {"role": "control-plane", "vm_id": 102, "ip_address": "10.0.0.12/24"},
+  "worker01": {"role": "worker",        "vm_id": 103, "ip_address": "10.0.0.13/24"},
+  "worker03": {"role": "worker",        "vm_id": 105, "ip_address": "10.0.0.15/24"}
+}'
+inv="/repo/ansible/inventories/production/tofu_inventory.py"
+inv_out="$(docker exec -e TOFU_NODES_JSON="$inventory_json" "$NAME" python3 "$inv" --list)" \
+  || fail "tofu_inventory: --list failed"
+echo "$inv_out" | docker exec -i "$NAME" python3 -c '
+import json, sys
+inv = json.load(sys.stdin)
+hv = inv["_meta"]["hostvars"]
+assert inv["k8s_workers"]["hosts"] == ["worker01", "worker03"], inv["k8s_workers"]
+assert inv["k8s_control_plane"]["hosts"] == ["cp01"]
+assert inv["vpn_gateway"]["hosts"] == ["vpn01"]
+assert inv["k8s_nodes"]["hosts"] == ["cp01", "worker01", "worker03"]
+assert sorted(inv["homelab_vms"]["hosts"]) == ["cp01", "vpn01", "worker01", "worker03"]
+assert hv["worker03"] == {"ansible_host": "10.0.0.15", "ansible_user": "ubuntu", "vmid": 105, "node_role": "worker"}, hv["worker03"]
+' || fail "tofu_inventory: groups or host variables are wrong (a new worker must appear with no other edit)"
+if docker exec -e TOFU_NODES_JSON='{"x": {"role": "gpu", "vm_id": 1, "ip_address": "10.0.0.1/24"}}' "$NAME" python3 "$inv" --list >/dev/null 2>&1; then
+  fail "tofu_inventory: accepted a node with an unknown role"
+fi
 
 # ---------------------------------------------------------------- guest_hardening
 echo "== guest_hardening"

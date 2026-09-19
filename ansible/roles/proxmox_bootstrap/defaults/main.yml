@@ -31,7 +31,13 @@ proxmox_bootstrap_opentofu_role_privs:
   # which needs the write privilege Pool.Allocate.
   - Pool.Audit
 proxmox_bootstrap_pool: "homelab"
-proxmox_bootstrap_pool_vmids: [101, 102, 103, 104, 9000]
+# VMs that belong to the pool: every lab VM in the inventory (the OpenTofu-generated
+# inventory carries each VM's `vmid`) plus the template. A static inventory without
+# VMIDs falls back to the original four.
+proxmox_bootstrap_pool_template_vmid: 9000
+proxmox_bootstrap_pool_vmids: >-
+  {{ ((groups['homelab_vms'] | default([]) | map('extract', hostvars, 'vmid') | select('defined') | list)
+      or [101, 102, 103, 104]) + [proxmox_bootstrap_pool_template_vmid] }}
 # The old grant of PVEVMAdmin on `/`. Leave false until the narrower grants have
 # been tested, then set true once to remove it.
 proxmox_bootstrap_remove_root_acl: false

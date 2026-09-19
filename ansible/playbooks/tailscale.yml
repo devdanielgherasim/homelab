@@ -13,9 +13,9 @@
 # Dry run first, then the real run (the key file is only read when the host is
 # not yet in the tailnet):
 #
-#   ansible-playbook -i inventories/production/hosts.yml \
+#   ansible-playbook -i inventories/production/ \
 #     playbooks/tailscale.yml --private-key ~/.ssh/homelab_admin_ed25519 --check --diff
-#   TS_AUTHKEY_FILE=~/.ts-authkey ansible-playbook -i inventories/production/hosts.yml \
+#   TS_AUTHKEY_FILE=~/.ts-authkey ansible-playbook -i inventories/production/ \
 #     playbooks/tailscale.yml --private-key ~/.ssh/homelab_admin_ed25519
 #
 # Delete the key file afterwards. Changing remote-access rules is an explicit

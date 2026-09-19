@@ -5,7 +5,7 @@
 # deliberately deferred (ufw, swap-disable, fail2ban).
 #
 # Example:
-#   ansible-playbook -i inventories/production/hosts.yml \
+#   ansible-playbook -i inventories/production/ \
 #     playbooks/guest-hardening.yml --private-key ~/.ssh/homelab_admin_ed25519
 
 - name: Harden homelab guest VMs

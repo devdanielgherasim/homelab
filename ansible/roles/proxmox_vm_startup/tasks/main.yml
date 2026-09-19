@@ -2,11 +2,31 @@
 # Idempotent: reads each VM's current `startup` setting and only changes it when
 # it differs. Runs on the Proxmox host as root.
 
+- name: Work out the order of each VM from the inventory
+  # Needs `vmid` and `node_role` on every lab VM, as the OpenTofu-generated
+  # inventory provides. Otherwise the explicit fallback list is used.
+  ansible.builtin.set_fact:
+    proxmox_vm_startup_effective: >-
+      {{ dict(groups['homelab_vms']
+              | map('extract', hostvars, 'vmid') | list
+              | zip(groups['homelab_vms']
+                    | map('extract', hostvars, 'node_role')
+                    | map('extract', proxmox_vm_startup_by_role) | list)) }}
+  when:
+    - groups['homelab_vms'] | default([]) | length > 0
+    - hostvars[groups['homelab_vms'][0]].vmid is defined
+    - hostvars[groups['homelab_vms'][0]].node_role is defined
+
+- name: Otherwise use the explicit fallback list
+  ansible.builtin.set_fact:
+    proxmox_vm_startup_effective: "{{ proxmox_vm_startup_orders }}"
+  when: proxmox_vm_startup_effective is not defined
+
 - name: Read the current startup setting of each VM
   ansible.builtin.shell:
     cmd: "set -o pipefail; qm config {{ item.key }} | sed -n 's/^startup: //p'"
     executable: /bin/bash
-  loop: "{{ proxmox_vm_startup_orders | dict2items }}"
+  loop: "{{ proxmox_vm_startup_effective | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
   changed_when: false

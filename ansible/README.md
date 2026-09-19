@@ -21,7 +21,8 @@ ansible/
 ├── ansible.cfg     # roles_path etc. — see "Running from WSL2" below
 ├── inventories/
 │   └── production/
-│       ├── hosts.example.yml            # copy to hosts.yml (gitignored), fill in real values
+│       ├── hosts.example.yml            # copy to hosts.yml (gitignored): the Proxmox host only
+│       ├── tofu_inventory.py            # the lab VMs and their groups, from OpenTofu's `nodes` output
 │       └── group_vars/*.yml.example        # copy to *.yml (gitignored): proxmox, vpn_gateway
 ├── playbooks/
 │   ├── proxmox-bootstrap.yml   # implements installation.md steps 1-4 — see its header before running
@@ -192,9 +193,9 @@ addresses and is not kept in this repository.
    in the tailnet):
 
    ```bash
-   ansible-playbook -i inventories/production/hosts.yml playbooks/tailscale.yml \
+   ansible-playbook -i inventories/production/ playbooks/tailscale.yml \
      --private-key ~/.ssh/homelab_admin_ed25519 --check --diff
-   TS_AUTHKEY_FILE=~/.ts-authkey ansible-playbook -i inventories/production/hosts.yml \
+   TS_AUTHKEY_FILE=~/.ts-authkey ansible-playbook -i inventories/production/ \
      playbooks/tailscale.yml --private-key ~/.ssh/homelab_admin_ed25519
    ```
 

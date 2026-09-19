@@ -19,7 +19,7 @@
 # (docs/runbooks/backup-and-restore.md), and do a --check --diff first.
 #
 # Example:
-#   ansible-playbook -i inventories/production/hosts.yml \
+#   ansible-playbook -i inventories/production/ \
 #     playbooks/k8s-harden.yml --private-key ~/.ssh/homelab_admin_ed25519 --check --diff
 #
 # Rollback: copy the manifests from /var/backups/kubeadm/manifests-<epoch>/ back

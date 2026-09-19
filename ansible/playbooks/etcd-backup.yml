@@ -4,7 +4,7 @@
 # under /var/backups/etcd. See docs/runbooks/backup-and-restore.md.
 #
 # Example:
-#   ansible-playbook -i inventories/production/hosts.yml \
+#   ansible-playbook -i inventories/production/ \
 #     playbooks/etcd-backup.yml --private-key ~/.ssh/homelab_admin_ed25519
 
 - name: Schedule verified etcd snapshots on the control plane

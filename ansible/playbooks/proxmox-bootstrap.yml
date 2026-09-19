@@ -23,7 +23,7 @@
 #      genuinely risky step; only after step 3's key login is confirmed)
 #
 # Example:
-#   ansible-playbook -i inventories/production/hosts.yml \
+#   ansible-playbook -i inventories/production/ \
 #     playbooks/proxmox-bootstrap.yml --tags network_check
 #
 # Keep console/physical access to the laptop available until steps 5 and

@@ -8,7 +8,7 @@
 # confirmation prompts.
 #
 # Example:
-#   ansible-playbook -i inventories/production/hosts.yml \
+#   ansible-playbook -i inventories/production/ \
 #     playbooks/proxmox-template.yml --private-key ~/.ssh/homelab_admin_ed25519
 
 - name: Build Ubuntu 24.04 cloud-init template

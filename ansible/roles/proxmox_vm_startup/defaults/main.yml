@@ -6,11 +6,19 @@
 #
 # Value = Proxmox `startup` string: `order` starts lowest first, `up` is the
 # number of seconds to wait after this VM before the next one starts.
+#
+# The order follows each VM's role, so a new worker is ordered without any edit
+# here: the VPN gateway first (remote access is back early), then the control
+# plane with time to come up, then every worker.
+proxmox_vm_startup_by_role:
+  vpn: "order=1"
+  control-plane: "order=2,up=60"
+  worker: "order=3"
+
+# Fallback for a static inventory that carries no `vmid` and `node_role` per
+# host: the original four VMs, explicitly.
 proxmox_vm_startup_orders:
-  # VPN gateway first, so remote access is back early.
   101: "order=1"
-  # Control plane next, given time to come up before the workers try to reach it.
   102: "order=2,up=60"
-  # Workers last.
   103: "order=3"
   104: "order=3"
