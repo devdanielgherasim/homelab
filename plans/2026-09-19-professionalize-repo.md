@@ -285,14 +285,22 @@ then one integration pass here. Nothing is applied to the cluster without approv
   - Lessons: the agent-written demo manifests had two bugs no offline validator sees
     (`args` without `command` replaced the image CMD; HTTPRoute defaults missing, so the
     Application stayed OutOfSync). Test agent output on the cluster before pushing.
-- [ ] G4. Observability (Prometheus + Grafana, Hubble metrics, capacity dashboards
+- [x] G4. Observability (Prometheus + Grafana, Hubble metrics, capacity dashboards
   for later autoscaling), logs only if they fit in RAM, storage decision without a
   StorageClass.
-  - Pushed `d5a4c71`: stack Synced; Prometheus, operator, kube-state-metrics and the
-    three node-exporters run. Grafana sidecars were OOMKilled at 64Mi; fix (128Mi
-    limit, README budget 708Mi) is local, not pushed. The `monitoring` namespace and
-    the `grafana-admin` Secret were created BY HAND: to be replaced by task P4.
-  - Open: verify targets/rules/dashboard, Cilium and Hubble metrics.
+  - DONE 2026-09-20: stack pushed `d5a4c71` (sidecar and Grafana limits corrected after
+    OOM kills and a measurement, budget 772Mi of requests); namespace and Secret moved
+    into the platform stage (P4); Cilium and Hubble metrics `acf3605` + a platform apply
+    with the owner's approval. Verified: 27 of 27 targets `up` (cilium-agent 3, hubble 3,
+    cilium-operator 1), 4,537 Cilium and 113 Hubble series, six dashboards in the folder
+    "Cilium", Prometheus 334Mi of 700Mi (was 285Mi; 81,000 series, was 73,000), agents
+    restarted by `rollOutCiliumPods` with no `Mismatch found`, nodes `Ready` throughout,
+    Gateway HTTP 200, empty plan afterwards.
+  - Decision recorded: the chart's ServiceMonitors stay off (Cilium is installed before
+    the Operator's CRDs exist, so they would break a bootstrap from zero); PodMonitors
+    in Git instead.
+  - Deferred, on purpose: Loki and Tempo (need a storage decision, little RAM left),
+    Istio metrics, kube-scheduler/etcd scraping (needs kubeadm changes), Alertmanager.
 - [ ] G5. Kyverno policies and Trivy operator (if RAM allows), NetworkPolicies
   default-deny per namespace.
 

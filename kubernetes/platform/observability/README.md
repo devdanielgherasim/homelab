@@ -191,6 +191,9 @@ chart is installed by the platform stage before Argo CD and before this stack's 
 the CRDs are there. Envoy is off, so it has no monitor. The Hubble metric list is short on
 purpose (`dns`, `drop`, `tcp`, `flow`, `icmp`): flow metrics add many series, so watch the
 Prometheus memory limit before adding more (`prometheus_tsdb_head_series` and the working set).
+Measured after switching it on (2026-09-20): 4,537 `cilium_*` and 113 `hubble_*` series, 81,000
+series in the head (73,000 before), Prometheus 334Mi working set against 285Mi before, limit 700Mi.
+All 7 new targets `up`.
 
 ## Deferred
 
