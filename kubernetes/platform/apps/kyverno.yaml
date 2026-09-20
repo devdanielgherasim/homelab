@@ -28,6 +28,16 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: kyverno
+  # The CRDs of the policies.kyverno.io group are rendered with `labels: {}` and
+  # `annotations: {}`; the live objects have neither field, and Argo CD reads that as a change
+  # (found with the managed-resources API: the whole diff was those two empty maps). Without this
+  # the Application stays OutOfSync and self-heal re-syncs it in a loop.
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /metadata/labels
+        - /metadata/annotations
   syncPolicy:
     automated:
       prune: true

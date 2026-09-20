@@ -2,20 +2,23 @@
 # Design and reasons: ADR-0019. Installed by kubernetes/platform/apps/kyverno.yaml.
 
 # --- CRDs ---------------------------------------------------------------------------------
-# The API server already holds 48 CRDs and about 1.2 GiB. The chart's 22 CRDs are 5.6 MiB of
-# schema, and the two legacy policy types alone (ClusterPolicy and Policy) are 1.4 MiB each; the
-# chart marks them deprecated in favour of the `policies.kyverno.io` types. This cluster uses the
-# new ValidatingPolicy (CEL) type only, so only what it and the reports need is installed.
+# The API server already holds 48 CRDs and about 1.2 GiB, so the CRD set is trimmed as far as
+# Kyverno 1.19.1 allows. This cluster writes its policies as the new ValidatingPolicy (CEL) type
+# and does not use the legacy ClusterPolicy and Policy types (the chart marks them deprecated),
+# but both controllers REFUSE TO START without those two CRDs: the admission controller exits
+# with "sanity checks failed ... CRD clusterpolicies.kyverno.io ... policies.kyverno.io ... not
+# found" and the reports controller cannot list them. They were switched off first and the
+# rollout showed it, so they are on, 1.4 MiB of schema each. The cleanup types go with the
+# cleanup controller, which is off.
 crds:
   install: true
   groups:
     kyverno:
-      # Small, and the controllers watch them; the large legacy policy types are off.
       cleanuppolicies: false
       clustercleanuppolicies: false
-      clusterpolicies: false
+      clusterpolicies: true
       globalcontextentries: true
-      policies: false
+      policies: true
       policyexceptions: true
       updaterequests: true
     # The `policies.kyverno.io` group (ValidatingPolicy and its siblings, 18 CRDs in all, 2.5 MiB)

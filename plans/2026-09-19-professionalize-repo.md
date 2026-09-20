@@ -378,15 +378,19 @@ tags, resource requests and limits, trusted registries, no NodePort, no unapprov
 namespaces. Audit first, fail open.
 
 - [x] K1. Research and design, offline: chart 3.9.1 (Kyverno v1.19.1); the legacy policy types
-  are deprecated, so the new `ValidatingPolicy` (CEL) only; 22 CRDs and 5.6 MiB of schema by
-  default, 18 and 2.5 MiB with the legacy group off (the chart ignores the switches for the
-  `policies.kyverno.io` group: found by reading the sub-chart, not assumed); validation only
-  (background and cleanup controllers off); about 190 MiB of requests; every pod restricted
-  compliant (checked on the render). Application, values and ADR-0019 (Proposed) written.
-- [ ] K2. Push and install; measure on the cluster: API server memory before and after, node
-  memory, webhook configurations, `kubectl` latency; check that the Application is
-  `Synced/Healthy` and nothing else moved. Verify what Argo CD does with the chart's pre-delete
-  hook.
+  are deprecated, so policies are the new `ValidatingPolicy` (CEL); validation only (background
+  and cleanup controllers off); about 190 MiB of requests; every pod restricted compliant
+  (checked on the render). Application, values and ADR-0019 (Proposed) written.
+  - WRONG in that design, found by the rollout: I had switched the legacy CRDs off to save 2.8
+    MiB of schema. Kyverno 1.19.1 does not start without them.
+- [ ] K2. Installed (`660da69`), then repaired: (a) the admission controller crash-looped
+  ("sanity checks failed ... CRD clusterpolicies.kyverno.io ... not found"), no webhook was
+  registered so nothing was cut; the two legacy CRDs are switched back on (20 CRDs, about 5.8
+  MiB); (b) 11 CRDs `OutOfSync`, the diff being two empty maps (`labels: {}`, `annotations: {}`),
+  ignored in the Application. Baseline taken before (apiserver 1148 MiB, cp01 65%, 48 CRDs, 2
+  validating and 1 mutating webhook, about 0.63 s per kubectl call). To do: push the repair,
+  measure after, check `Synced/Healthy` and that nothing else moved, and what Argo CD does with
+  the chart's pre-delete hook.
 - [ ] K3. Policies in Audit (`ValidatingPolicy`, `failurePolicy: Ignore`): disallow `latest` and
   untagged images, require requests and a memory limit, registry allowlist, no NodePort Services,
   `privileged` Pod Security label only on an allowlist of namespaces. Read the policy reports,

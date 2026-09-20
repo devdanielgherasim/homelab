@@ -20,12 +20,14 @@ already holds 1.2 GiB with 48 CRDs, and the workers have little memory to spare.
 
 Install Kyverno (chart 3.9.1, Kyverno v1.19.1) through Argo CD, trimmed:
 
-- **The new policy type only.** The chart marks the legacy `ClusterPolicy` and `Policy` types
-  deprecated in favour of `policies.kyverno.io`. Policies are written as `ValidatingPolicy`
-  (CEL, evaluated by the API machinery's expression engine, no JSON-patch engine). The two legacy
-  CRDs, 1.4 MiB of schema each, are not installed; the chart's `policies.kyverno.io` group cannot
-  be trimmed (its switches are ignored in 3.9.1), so 18 CRDs and 2.5 MiB of schema come with it,
-  against 22 CRDs and 5.6 MiB by default.
+- **Policies are written in the new type only.** The chart marks the legacy `ClusterPolicy` and
+  `Policy` types deprecated in favour of `policies.kyverno.io`, so the rules here are
+  `ValidatingPolicy` (CEL). The CRDs could not be trimmed the way this decision first assumed:
+  Kyverno 1.19.1 **will not start without the legacy `ClusterPolicy` and `Policy` CRDs** (the
+  admission controller exits at its sanity check and the reports controller cannot list them),
+  even though nothing here uses them, and the chart ignores the switches of the
+  `policies.kyverno.io` group. That leaves 20 CRDs and about 5.8 MiB of schema, against 22 and
+  5.6 MiB by default: only the two cleanup CRDs (with the cleanup controller) are saved.
 - **Validation only.** The background and cleanup controllers, which serve mutate-existing,
   generate and scheduled deletion, are off. What runs is the admission controller (one replica)
   and the reports controller, about 190 MiB of requests in all.
@@ -53,9 +55,19 @@ Install Kyverno (chart 3.9.1, Kyverno v1.19.1) through Argo CD, trimmed:
 
 ## Consequences
 
-One more component in the request path, and 2.5 MiB of CRD schema for the API server to hold (on
-top of 48 CRDs and about 1.2 GiB). The install is measured on the running cluster (API server
-memory, node memory, webhook latency) and the numbers are recorded here. Policies live in `kubernetes/platform/policies/kyverno/`. Uninstalling needs the
-webhook configurations removed (the chart's pre-delete hook does it; whether Argo CD 3.5 runs
+One more component in the request path, and about 5.8 MiB of CRD schema for the API server to
+hold, on top of 48 CRDs and about 1.2 GiB. The install is measured on the running cluster (API
+server memory, node memory, webhook latency) and the numbers are recorded here.
+
+What the first rollout found (2026-09-20), because the design above had been written from the
+chart's values and templates and not from a run: the admission controller crash-looped on the
+missing legacy CRDs (nothing was cut: it never registered a webhook), and 11 of the
+`policies.kyverno.io` CRDs showed as `OutOfSync` forever, the whole difference being two empty
+maps (`labels: {}` and `annotations: {}`) that the chart renders and the live objects do not have;
+the Application now ignores those two fields on CRDs. The Argo CD managed-resources API was what
+showed the real diff, after `kubectl diff --server-side` had shown none.
+
+Policies live in `kubernetes/platform/policies/kyverno/`. Uninstalling needs the webhook
+configurations removed (the chart's pre-delete hook does it; whether Argo CD 3.5 runs
 that hook has to be checked, and until then it is a manual step). Kyverno 1.19 is not documented
 as tested on Kubernetes 1.37, like the other components (see `STATUS.md`).
