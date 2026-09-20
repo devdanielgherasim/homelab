@@ -8,6 +8,7 @@ the operation has ever been run once is a guess, not a runbook.
 
 - [`backup-and-restore.md`](backup-and-restore.md) — what is backed up, how to check it, and the two restore drills that have been exercised.
 - [`rebuild-cluster.md`](rebuild-cluster.md) — replace the cluster VMs and bring the platform back from Git (exercised 2026-09-20, about 27 minutes).
+- [`add-node-and-worker.md`](add-node-and-worker.md) — add a Proxmox node, add, move or remove a worker with `scripts/proxmox-node.sh` and `scripts/worker.sh` (the parts were exercised by hand on 2026-09-20; the scripts are not yet run end to end).
 
 ## Format
 

@@ -12,6 +12,8 @@
 #   proxmox_vm_startup, proxmox_backup  with two standalone Proxmox hosts, each acts only on
 #                    the VMs on it (against stand-ins for qm, pvesh and pvesm).
 #   proxmox_bootstrap  the temporary OpenTofu session: a private token per host, gone at the end.
+#   homelab_config.py  the helper behind worker.sh and proxmox-node.sh edits the workers, the
+#                    Proxmox nodes and the inventory hosts, and leaves everything else alone.
 #   guest_hardening  beats a cloud-init drop-in, is idempotent, refuses a lock-out.
 #   tailscale        installs from the signed repo, enables forwarding, is idempotent,
 #                    refuses to run without routes. It never joins a tailnet here.
@@ -214,6 +216,42 @@ session_run tofu_session_close >"$logdir/session-close.log" 2>&1 \
   || { cat "$logdir/session-close.log"; fail "tofu_session_close failed"; }
 if docker exec "$NAME" bash -c 'ls /tmp/mh/cfg/session/*.token' >/dev/null 2>&1; then fail "the session token files were not removed"; fi
 docker exec "$NAME" grep -q '^pve02 pveum user delete tofu-session@pve' /tmp/mh/calls.log || fail "the session user was not removed from pve02"
+
+
+# ------------------------------------------------------------ worker.sh / proxmox-node.sh helper
+# The one-line entries of terraform.tfvars and the Proxmox hosts of the inventory are edited by
+# scripts/lib/homelab_config.py, so nobody edits HCL or YAML by hand to add a worker or a node.
+echo "== homelab_config.py (workers, nodes, hosts)"
+docker exec -i "$NAME" bash -euc '
+  cd /tmp && mkdir -p cfgtest && cd cfgtest
+  cat > tv <<"TV"
+proxmox_node_name = "pve01"
+vpn01_ip = "10.0.0.11/24"
+cp01_ip = "10.0.0.12/24"
+
+workers = {
+  worker01 = { vmid = 103, ip_address = "10.0.0.13/24" }
+}
+TV
+  printf "proxmox:\n  hosts:\n    pve01:\n      ansible_host: 10.0.0.2\n      ansible_user: root\n" > hosts.yml
+  export HOMELAB_TFVARS=/tmp/cfgtest/tv HOMELAB_INVENTORY=/tmp/cfgtest/hosts.yml HOMELAB_CONFIG_DIR=/tmp/cfgtest/cfg
+  c="python3 /repo/scripts/lib/homelab_config.py"
+  $c nodes add pve02 https://10.0.0.20:8006/ >/dev/null; grep -qx "  pve02 = { endpoint = \"https://10.0.0.20:8006/\", slot = 1 }" tv
+  $c nodes add pve03 https://10.0.0.30:8006/ >/dev/null; grep -q "pve03 = { endpoint = \"https://10.0.0.30:8006/\", slot = 2 }" tv
+  $c workers add worker02 --node pve02 --memory 5632 --cores 3 >/dev/null
+  $c workers add worker03 >/dev/null
+  grep -qx "  worker02 = { vmid = 104, ip_address = \"10.0.0.14/24\", node = \"pve02\", cores = 3, memory = 5632 }" tv
+  grep -qx "  worker03 = { vmid = 105, ip_address = \"10.0.0.15/24\" }" tv
+  $c workers set-node worker03 pve02 >/dev/null; grep -q "worker03 = { vmid = 105, ip_address = \"10.0.0.15/24\", node = \"pve02\" }" tv
+  $c workers remove worker03 >/dev/null; ! grep -q worker03 tv
+  ! $c workers add worker02 2>/dev/null   # a name is used once
+  ! $c workers add worker07 --node nowhere 2>/dev/null   # a node the lab does not know
+  ! $c nodes add pve02 https://x/ 2>/dev/null
+  $c hosts add pve02 10.0.0.20 >/dev/null
+  python3 -c "
+import yaml; h = list(yaml.safe_load(open(\"hosts.yml\"))[\"proxmox\"][\"hosts\"]); assert h == [\"pve01\", \"pve02\"], h"
+  grep -q "^vpn01_ip" tv && grep -q "^proxmox_node_name" tv   # what it does not manage stays
+' || fail "homelab_config.py: adding and removing workers, nodes and hosts is wrong"
 
 
 # ---------------------------------------------------------------- guest_hardening
