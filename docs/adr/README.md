@@ -30,9 +30,10 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0014](0014-gitops-structure.md) | GitOps structure: Argo CD app-of-apps, scoped projects, CNI outside GitOps | Accepted |
 | [0015](0015-loadbalancer-cilium-l2.md) | LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB | Accepted |
 | [0016](0016-platform-bootstrap-with-opentofu.md) | Platform bootstrap (Cilium, Argo CD, secrets) with OpenTofu, not by hand | Accepted |
+| [0017](0017-network-policies-default-deny.md) | Default-deny network policies with Cilium, rolled out through audit mode | Accepted |
 
 New ADRs get the next sequential number and are added to this table.
 
-ADRs 0001-0007, 0014, 0015 and 0016 are implemented and in use. 0008 (platform layer not built
+ADRs 0001-0007 and 0014-0017 are implemented and in use. 0008 (platform layer not built
 yet) stays **Proposed** until the corresponding
 component is deployed and the decision is confirmed.

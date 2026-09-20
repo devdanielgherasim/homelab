@@ -309,10 +309,16 @@ then one integration pass here. Nothing is applied to the cluster without approv
     rule shows as `AUDIT` in Hubble instead of cutting a service:
     - [x] audit mode on: `0126d44` pushed, platform apply done (Cilium revision 3, nodes
       `Ready`, Gateway 200, empty plan).
-    - [ ] push the policies (audit: nothing denied); exercise the cluster; read
-      `hubble observe --verdict AUDIT`; fix gaps.
-    - [ ] `policyAuditMode: false` (platform apply) = enforcement; verify; a pod outside the
-      allowed set must be refused.
+    - [x] policies pushed (`fe4d6cf`), audit read after a negative control (the audit
+      reports `policy-verdict:none EGRESS AUDITED`), gaps fixed (`7c2fb5e`: Grafana plugin
+      update check off, API server Service proxy allowed for Prometheus and Grafana; podinfo's
+      probe of `169.254.169.254` kept denied).
+    - [x] enforcement: `02291e7` pushed, platform apply with the owner's approval on
+      2026-09-20. 10 checks passed, incl. a negative control (test pod refused for the
+      internet and another namespace, DNS allowed), Argo CD sync with its hook Job, a new
+      meshed pod, Gateway 40/40, 27/27 targets, empty plan. Rollback stays
+      `policyAuditMode: true`. ADR-0017.
+    - Residual drops, harmless: 24 ICMPv6 packets between unresolved identities.
     - Cases sampling did not show but that would break: Grafana to Prometheus 9090, API
       server to istiod webhooks 15017, Argo CD's PreSync Job `argocd-redis-secret-init`.
   - Step 2, Kyverno (audit first, then enforce): not started. Step 3, Trivy operator: last,

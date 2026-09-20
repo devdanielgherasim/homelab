@@ -57,6 +57,16 @@ syncs of Argo CD itself):
   `ALLOWED`: the audit does report what enforcement would deny (the report is a
   `policy-verdict` event, and the Hubble filter is `--verdict AUDIT`).
 
+## Result (2026-09-20)
+
+Enforcement is on (`policyAuditMode: false`). The verification after switching it on: all 12
+Applications `Synced/Healthy`, 27 of 27 Prometheus targets `up`, the Gateway answered 40 of 40,
+Lens's path (the API server's Service proxy) reached Prometheus and Grafana, Grafana queried
+Prometheus, an Argo CD sync ran its PreSync hook Job, a new meshed pod started, and a test pod in
+`demo` was refused for the internet and for another namespace while DNS worked. Hubble reported
+two dropped paths: podinfo's metadata probe (intentional) and ICMPv6 between unresolved identities
+(not from these workloads). Decision record: [ADR-0017](../../../docs/adr/0017-network-policies-default-deny.md).
+
 ## Rolling out or changing a policy
 
 Enforcement cuts traffic the moment it is on, and a missing rule is only visible when
