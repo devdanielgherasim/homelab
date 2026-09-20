@@ -1,0 +1,231 @@
+# Default-deny for the monitoring namespace, then exactly the flows Hubble showed (checked on
+# 2026-09-20 against 12,000 flows) plus the ones that are needed but rare (Grafana asking
+# Prometheus, the operator talking to Prometheus).
+#
+# Cilium entities keep addresses out of Git: `kube-apiserver` and `host`/`remote-node` are the
+# control-plane node and the other nodes. Prometheus scrapes hostNetwork pods (node-exporter,
+# the Cilium agents, the operator) and the kubelet, which are all reached as those entities.
+#
+# `ingress: [{}]` / `egress: [{}]` is the documented Cilium way to turn enforcement on with no
+# allowed traffic; the policies below then add to it.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Deny all ingress and egress in this namespace unless another policy allows it."
+  endpointSelector: {}
+  ingress:
+    - {}
+  egress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-dns-and-node-probes
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "DNS to CoreDNS, and traffic from the pod's own node (kubelet probes, kubectl port-forward)."
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Prometheus: scrape the cluster, be queried by Grafana, be driven by the operator."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: grafana
+        - matchLabels:
+            app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+  egress:
+    # API server (service discovery, its own metrics), kubelet and cAdvisor (10250),
+    # node-exporter (9100), Cilium agent, operator and Hubble metrics (9962, 9963, 9965).
+    - toEntities:
+        - kube-apiserver
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+            - port: "10250"
+              protocol: TCP
+            - port: "9100"
+              protocol: TCP
+            - port: "9962"
+              protocol: TCP
+            - port: "9963"
+              protocol: TCP
+            - port: "9965"
+              protocol: TCP
+    # CoreDNS metrics.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "9153"
+              protocol: TCP
+    # The other pods of this stack.
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: grafana
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: kube-state-metrics
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "8081"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Grafana: queries Prometheus, its sidecars watch ConfigMaps through the API server, Prometheus scrapes it."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus-operator
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The operator: reconciles through the API server, reloads and checks Prometheus, is scraped by it."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: kube-state-metrics
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "kube-state-metrics: reads the API server, is scraped by Prometheus."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "8081"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

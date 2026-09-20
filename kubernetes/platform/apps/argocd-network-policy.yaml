@@ -1,0 +1,33 @@
+# The network policies of the argocd namespace. Separate from network-policies.yaml because
+# the `platform` project is not allowed to write to `argocd` (a project that could would have
+# administrator-level access to Argo CD, ADR-0014); the `bootstrap` project is.
+# prune is off: removing a policy from Git must never silently open Argo CD's own network.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-network-policy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  project: bootstrap
+  source:
+    repoURL: https://github.com/devdanielgherasim/homelab.git
+    targetRevision: main
+    path: kubernetes/platform/policies/argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

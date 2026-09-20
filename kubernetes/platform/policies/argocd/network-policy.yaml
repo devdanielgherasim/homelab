@@ -1,0 +1,199 @@
+# Default-deny for the argocd namespace, then exactly the flows Argo CD needs. The chart also
+# ships four plain NetworkPolicies (ingress only, kubernetes/bootstrap/argocd/values.yaml);
+# they stay, and the rules here add to them.
+#
+# The one that is easy to miss: the chart's `argocd-redis-secret-init` Job is a Helm hook
+# that Argo CD runs as a PreSync hook at every sync. It needs the API server, so a default-deny
+# without a rule for it would make every sync of Argo CD itself fail.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Deny all ingress and egress in this namespace unless another policy allows it."
+  endpointSelector: {}
+  ingress:
+    - {}
+  egress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-dns-and-node-probes
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "DNS to CoreDNS, and traffic from the pod's own node (kubelet probes, kubectl port-forward to the UI)."
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: application-controller
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The controller: renders through the repo server, caches in Redis, applies through the API server."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-application-controller
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: argocd-repo-server
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: argocd-redis
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: repo-server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The repo server: asked by the controller and the API server, reads Git and chart repositories over HTTPS."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-repo-server
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: argocd-application-controller
+        - matchLabels:
+            app.kubernetes.io/name: argocd-server
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: argocd-redis
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+    # GitHub and the Helm chart repositories. Their addresses change, so this is HTTPS to
+    # anywhere outside the cluster; narrowing it to names needs Cilium's DNS proxy (toFQDNs).
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The API and UI server: Redis, the repo server and the Kubernetes API. No ingress except from its own node (port-forward)."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: argocd-redis
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: argocd-repo-server
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: redis
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Redis: only the three Argo CD components talk to it."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-redis
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: argocd-application-controller
+        - matchLabels:
+            app.kubernetes.io/name: argocd-repo-server
+        - matchLabels:
+            app.kubernetes.io/name: argocd-server
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: redis-secret-init
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The Helm hook Job that creates the Redis password Secret needs the API server."
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-redis-secret-init
+  egress:
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

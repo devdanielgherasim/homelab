@@ -1,0 +1,41 @@
+# CiliumNetworkPolicies: default-deny per namespace plus the flows each namespace needs.
+# One directory per project boundary: this Application covers the namespaces the `platform`
+# project may write to; the policies for `argocd` are in argocd-network-policy.yaml, because
+# only the `bootstrap` project may write there.
+#
+# Rollout order matters and is in kubernetes/platform/policies/README.md: the policies were
+# first applied with Cilium's audit mode on (they log what they would deny, and deny nothing),
+# and enforcement was switched on after Hubble showed no unexpected verdicts.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: network-policies
+  namespace: argocd
+  annotations:
+    # After everything the policies protect, so a pod that starts late is not caught by a
+    # policy before the workload that needs it exists.
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/devdanielgherasim/homelab.git
+    targetRevision: main
+    path: kubernetes/platform/policies/network
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      # Same as the observability Application: do not fail the dry run if the CRD is not
+      # there yet on a first sync.
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

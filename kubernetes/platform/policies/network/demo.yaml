@@ -1,0 +1,40 @@
+# Default-deny for the plain demo namespace: nothing talks to podinfo except its own node
+# (probes, port-forward), and it talks to nobody except DNS. Add a policy here when something
+# needs to reach it.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: demo
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Deny all ingress and egress in this namespace unless another policy allows it."
+  endpointSelector: {}
+  ingress:
+    - {}
+  egress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-dns-and-node-probes
+  namespace: demo
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "DNS to CoreDNS, and traffic from the pod's own node (kubelet probes, kubectl port-forward)."
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY

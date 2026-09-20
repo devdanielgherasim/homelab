@@ -303,6 +303,23 @@ then one integration pass here. Nothing is applied to the cluster without approv
     Istio metrics, kube-scheduler/etcd scraping (needs kubeadm changes), Alertmanager.
 - [ ] G5. Kyverno policies and Trivy operator (if RAM allows), NetworkPolicies
   default-deny per namespace.
+  - Step 1, NetworkPolicies (in progress 2026-09-20). Design from 12,268 Hubble flows:
+    `CiliumNetworkPolicy` per namespace (`monitoring`, `istio-system`, `mesh-demo`, `demo`,
+    `argocd`), entities instead of addresses. Rollout with Cilium audit mode so a missed
+    rule shows as `AUDIT` in Hubble instead of cutting a service:
+    - [x] audit mode on: `0126d44` pushed, platform apply done (Cilium revision 3, nodes
+      `Ready`, Gateway 200, empty plan).
+    - [ ] push the policies (audit: nothing denied); exercise the cluster; read
+      `hubble observe --verdict AUDIT`; fix gaps.
+    - [ ] `policyAuditMode: false` (platform apply) = enforcement; verify; a pod outside the
+      allowed set must be refused.
+    - Cases sampling did not show but that would break: Grafana to Prometheus 9090, API
+      server to istiod webhooks 15017, Argo CD's PreSync Job `argocd-redis-secret-init`.
+  - Step 2, Kyverno (audit first, then enforce): not started. Step 3, Trivy operator: last,
+    only if RAM allows.
+  - Side thread, owner's spare PC (8 GB DDR3, SSD, on only while working, weak CPU): best
+    use is a bare-metal Ubuntu burst worker with a taint, not Proxmox and not a backup
+    target (it is off at 03:30). Waiting for the CPU model; add a task if wanted.
 
 ### P. Bootstrap as code (owner's requirement, 2026-09-20)
 

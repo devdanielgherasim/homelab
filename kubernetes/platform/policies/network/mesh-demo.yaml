@@ -1,0 +1,111 @@
+# Default-deny for the mesh demo. The Gateway takes plain HTTP from the LAN, forwards to the
+# two podinfo versions, and every sidecar (and the gateway) asks istiod for configuration and
+# certificates. Nothing else.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: mesh-demo
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Deny all ingress and egress in this namespace unless another policy allows it."
+  endpointSelector: {}
+  ingress:
+    - {}
+  egress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-dns-and-node-probes
+  namespace: mesh-demo
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "DNS to CoreDNS, and traffic from the pod's own node (kubelet and Service health probes)."
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: gateway
+  namespace: mesh-demo
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The Gateway pod: HTTP from the LAN, requests to the demo pods, xDS from istiod."
+  endpointSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: demo
+  ingress:
+    # LAN clients reach the LoadBalancer address; Cilium sees them as `world`.
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app: podinfo
+      toPorts:
+        - ports:
+            - port: "9898"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            app: istiod
+            k8s:io.kubernetes.pod.namespace: istio-system
+      toPorts:
+        - ports:
+            - port: "15012"
+              protocol: TCP
+            - port: "15010"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: podinfo
+  namespace: mesh-demo
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The demo pods: requests from the Gateway only, xDS from istiod."
+  endpointSelector:
+    matchLabels:
+      app: podinfo
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            gateway.networking.k8s.io/gateway-name: demo
+      toPorts:
+        - ports:
+            - port: "9898"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app: istiod
+            k8s:io.kubernetes.pod.namespace: istio-system
+      toPorts:
+        - ports:
+            - port: "15012"
+              protocol: TCP
+            - port: "15010"
+              protocol: TCP

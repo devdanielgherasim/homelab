@@ -1,0 +1,106 @@
+# Default-deny for istio-system. What is allowed: the sidecars and the gateway asking istiod
+# for configuration and certificates, the API server calling istiod's admission webhooks, and
+# istiod and the CNI agent calling the API server.
+#
+# The sidecars are selected by the label that turns injection on for their namespace
+# (istio-injection=enabled), so a new meshed namespace needs no change here. Cilium copies
+# namespace labels into the pod identity as k8s:io.cilium.k8s.namespace.labels.<key>.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: istio-system
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "Deny all ingress and egress in this namespace unless another policy allows it."
+  endpointSelector: {}
+  ingress:
+    - {}
+  egress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-dns-and-node-probes
+  namespace: istio-system
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "DNS to CoreDNS, and traffic from the pod's own node (kubelet probes)."
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: istiod
+  namespace: istio-system
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "istiod: xDS and certificate signing for the meshed pods, admission webhooks for the API server."
+  endpointSelector:
+    matchLabels:
+      app: istiod
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.cilium.k8s.namespace.labels.istio-injection: enabled
+      toPorts:
+        - ports:
+            - port: "15012"
+              protocol: TCP
+            - port: "15010"
+              protocol: TCP
+    # The API server calls the injection and validation webhooks (Service port 443, pod port
+    # 15017). Depending on which node the API server is on it arrives as one of these entities.
+    - fromEntities:
+        - kube-apiserver
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "15017"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: istio-cni
+  namespace: istio-system
+  labels:
+    app.kubernetes.io/part-of: network-policies
+spec:
+  description: "The CNI agent reads pods from the API server."
+  endpointSelector:
+    matchLabels:
+      k8s-app: istio-cni-node
+  egress:
+    - toEntities:
+        - kube-apiserver
+        - host
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
