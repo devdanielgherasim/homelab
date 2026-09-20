@@ -23,9 +23,10 @@ From there Argo CD manages itself and everything under `kubernetes/platform/apps
 `make bootstrap` (`scripts/bootstrap.sh`) runs the chain in that order as named stages (`vms`,
 `guests`, `cluster`, `host`, `kubeconfig`, `platform`; `vpn` is separate). Every `tofu apply`
 shows its plan and asks first; `make bootstrap ARGS=--plan-only` stops after the plans, and
-`make bootstrap STAGES="kubeconfig platform"` runs only those. The stages `kubeconfig` and
-`platform` (plan only) have been run through it on the live cluster; running the whole chain
-from nothing has not (plan task P8), so the order of the earlier stages is unproven.
+`make bootstrap STAGES="kubeconfig platform"` runs only those. The stages `guests`, `cluster`,
+`host`, `kubeconfig` and `platform` were run through it on 2026-09-20 to rebuild the cluster from
+Git ([runbook](../../../docs/runbooks/rebuild-cluster.md)); the `vms` stage was replaced by a
+manual `tofu apply -replace`, so it has not been run end to end.
 `TF_ENCRYPTION` is kept out of the other stages by the script, because the VM state is not
 encrypted and the Ansible inventory reads it.
 

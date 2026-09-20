@@ -7,6 +7,7 @@ the operation has ever been run once is a guess, not a runbook.
 ## Runbooks
 
 - [`backup-and-restore.md`](backup-and-restore.md) — what is backed up, how to check it, and the two restore drills that have been exercised.
+- [`rebuild-cluster.md`](rebuild-cluster.md) — replace the cluster VMs and bring the platform back from Git (exercised 2026-09-20, about 27 minutes).
 
 ## Format
 

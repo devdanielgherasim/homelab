@@ -1,6 +1,6 @@
 # 0016. Platform bootstrap with OpenTofu, not by hand
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-20
 
 ## Context
@@ -74,3 +74,25 @@ is read before every apply; the Argo CD chart is installed by two systems (tofu 
 bootstrap, Argo CD afterwards), which is safe only because both read the same values file
 and version. Whether the rebuild really works is proved by rebuilding the cluster, not by
 reading the code (plan task P8 in `plans/2026-09-19-professionalize-repo.md`).
+
+## Result of the rebuild from zero (2026-09-20)
+
+Accepted after the cluster was rebuilt from the repository (procedure and timings in
+[`../runbooks/rebuild-cluster.md`](../runbooks/rebuild-cluster.md)). The three cluster VMs
+were replaced, and Ansible plus the platform stage plus Argo CD brought back a cluster identical
+to the one before: the same 3 nodes, 12 Applications `Synced/Healthy`, pods per namespace and
+Helm charts. The platform stage planned `12 to add` on an empty state, applied in 2 minutes and
+was idempotent afterwards; Argo CD converged in 4 minutes. What the rebuild found, and what was
+done about it:
+
+- The base image has no guest agent, and the provider waited 15 minutes per VM for it.
+  `agent.timeout` in the VM module is now one minute.
+- `ansible.cfg` keeps host key checking on, and a new VM has a new key. `scripts/bootstrap.sh`
+  now forgets the old key of the VMs a plan creates and accepts an unknown key on first
+  contact; a rebuild done with a manual `-replace` has to do it by hand (runbook, step 5).
+- The script's own checks caught two mistakes of mine before they did harm (a plan-summary
+  guard with the wrong expected text, and an exported state passphrase that broke the
+  inventory); both are fixed.
+
+Not proven: bare-metal Proxmox, restoring a live cluster from an etcd snapshot, and the `vms`
+stage of the script end to end (the VMs were replaced by hand).

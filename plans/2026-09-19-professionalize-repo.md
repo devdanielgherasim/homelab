@@ -353,9 +353,25 @@ helm, kubernetes, kubectl and random providers, run after Ansible has built the 
     playbook headers, proven only by P8.
   - Open: the platform plan shows 2 comment-only Helm value changes (Cilium, Argo CD);
     apply them with the next approved platform apply.
-- [ ] P8. Proof from zero: rebuild the cluster VMs and run the chain end to end. Needs
+- [x] P8. Proof from zero: rebuild the cluster VMs and run the chain end to end. Needs
   the owner's explicit approval (destroys and recreates the running cluster; etcd
   backups exist; expected downtime a few hours).
+  - DONE 2026-09-20 with the owner's approval ("go rebuild"). Backups first (etcd
+    snapshot, `vzdump` of cp01, copies off the Proxmox host in a private WSL directory).
+    Replaced cp01/worker01/worker02 (`-replace`, plan checked to be exactly 3), then
+    Ansible stages, the platform stage (12 added on empty state), Argo CD converged.
+    Result identical to the baseline; details in `docs/runbooks/rebuild-cluster.md`.
+    Timings: VMs 15m37s (agent wait), Ansible 3m11s, platform 2m19s, Argo CD 4m04s,
+    about 27 minutes of downtime in total (estimate had been 1-2 hours).
+  - Findings and fixes: guest agent wait (`agent.timeout = "1m"` in the VM module, not
+    yet applied to the running VMs); host keys of recreated VMs (script now forgets them
+    when it creates the VMs; a manual `-replace` needs `ssh-keygen -R`); my plan guard
+    looked for "must be replaced" but `-replace` prints "will be replaced, as requested"
+    (it stopped safely, then I fixed it); Ansible ran fine in the order the script uses.
+  - Not proven: bare-metal Proxmox, live etcd restore, the `vms` stage end to end.
+  - Left over: `~/homelab-pre-rebuild-*` in WSL (private, holds the OLD cluster's CA and
+    Secret-encryption key) and `terraform.tfstate*.pre-rebuild` in the platform directory:
+    delete when the owner is satisfied. Lens and any Windows kubeconfig need the new one.
 
 ## Resume notes
 

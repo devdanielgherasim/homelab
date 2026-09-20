@@ -113,5 +113,9 @@ briefly offline; when it is done once, it belongs in this file. Until then the
 two drills above show that the snapshot is valid and that the whole VM can be
 brought back.
 
+Rebuilding the cluster from Git without any restore **has** been exercised: see
+[`rebuild-cluster.md`](rebuild-cluster.md). It recreates the cluster; it does not bring back
+its old state.
+
 Also not covered by any backup: the OpenTofu state file (local and gitignored),
 and all data on the Proxmox host outside the VM archives.

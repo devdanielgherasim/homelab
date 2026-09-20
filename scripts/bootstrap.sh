@@ -20,9 +20,9 @@
 # Every `tofu apply` shows its plan and asks before it applies (--yes skips the question,
 # --plan-only stops after the plan). Ansible stages are idempotent and run without a prompt.
 #
-# The stage ORDER has been checked stage by stage on the running cluster but the whole chain
-# has not yet been run from nothing: that proof is plan task P8. Until then treat a failure as
-# information about the order, not as a reason to skip a stage.
+# The order of guests, cluster, host, kubeconfig and platform was proven on 2026-09-20 by
+# rebuilding the cluster from Git (docs/runbooks/rebuild-cluster.md). The vms stage was
+# replaced there by a manual `tofu apply -replace`, so it has not been run end to end.
 
 set -euo pipefail
 
@@ -64,7 +64,11 @@ platform_encryption=${TF_ENCRYPTION:-}
 unset TF_ENCRYPTION
 
 # ansible-playbook with this repository's config and inventory (built from tofu's output).
+# ansible.cfg keeps host key checking on. A freshly created VM has a key nobody has seen yet,
+# so accept an unknown key on first contact (a key that CHANGED is still refused; the VMs
+# this run recreates get their old key removed below).
 export ANSIBLE_CONFIG="$repo_root/ansible/ansible.cfg"
+export ANSIBLE_SSH_COMMON_ARGS="-o StrictHostKeyChecking=accept-new"
 
 # Ansible exits 0 when a play matches no host, which would let a stage "succeed" doing nothing
 # (for example when the inventory script fails). Refuse to go on with an empty group.
@@ -81,9 +85,33 @@ play() {
     "playbooks/$playbook" --private-key "$ssh_key" "$@")
 }
 
+# Names of the VMs that a plan of the homelab stage creates or replaces.
+vms_created_by() {
+  (cd "$repo_root/tofu/environments/homelab" && tofu show -json "$1") | python3 -c '
+import json, re, sys
+for rc in json.load(sys.stdin).get("resource_changes", []):
+    if rc["type"] == "proxmox_virtual_environment_vm" and "create" in rc["change"]["actions"]:
+        m = re.match(r"module\.(?:workers\[\"([^\"]+)\"\]|([a-z0-9]+))\.", rc["address"])
+        print(m.group(1) or m.group(2))
+'
+}
+
+# Remove the old SSH host key of a VM that was just recreated: its key is new by definition.
+forget_host_keys_of() {
+  local name ip
+  (cd "$repo_root/tofu/environments/homelab" && tofu output -json nodes) > "$1.nodes"
+  while read -r name; do
+    [ -n "$name" ] || continue
+    ip=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["ip_address"].split("/")[0])' "$1.nodes" "$name")
+    echo "forgetting the old SSH host key of $name ($ip)"
+    ssh-keygen -R "$ip" >/dev/null 2>&1 || true
+  done < "$1"
+  rm -f "$1.nodes"
+}
+
 # plan, show it, ask, apply the plan that was shown.
 tofu_stage() {
-  local dir=$1 encryption=${2:-} planfile
+  local dir=$1 encryption=${2:-} planfile created
   local -a run=(env)
   if [ -n "$encryption" ]; then run+=("TF_ENCRYPTION=$encryption"); fi
   planfile=$(mktemp)
@@ -99,10 +127,18 @@ tofu_stage() {
     read -r -p "Apply this plan for $dir? [y/N] " answer
     [ "$answer" = "y" ] || die "not applied"
   fi
+  if [ "$dir" = "tofu/environments/homelab" ]; then
+    created=$(mktemp)
+    vms_created_by "$planfile" > "$created"
+  fi
   (
     cd "$repo_root/$dir"
     "${run[@]}" tofu apply -input=false "$planfile"
   )
+  if [ -n "${created:-}" ]; then
+    forget_host_keys_of "$created"
+    rm -f "$created"
+  fi
 }
 
 wait_for_ssh() {

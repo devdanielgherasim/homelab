@@ -29,10 +29,10 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0013](0013-control-plane-hardening.md) | Control-plane hardening, and what is deliberately left out | Accepted |
 | [0014](0014-gitops-structure.md) | GitOps structure: Argo CD app-of-apps, scoped projects, CNI outside GitOps | Accepted |
 | [0015](0015-loadbalancer-cilium-l2.md) | LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB | Accepted |
-| [0016](0016-platform-bootstrap-with-opentofu.md) | Platform bootstrap (Cilium, Argo CD, secrets) with OpenTofu, not by hand | Proposed |
+| [0016](0016-platform-bootstrap-with-opentofu.md) | Platform bootstrap (Cilium, Argo CD, secrets) with OpenTofu, not by hand | Accepted |
 
 New ADRs get the next sequential number and are added to this table.
 
-ADRs 0001-0007, 0014 and 0015 are implemented and in use. 0008 (platform layer not built
-yet) and 0016 (bootstrap in progress) stay **Proposed** until the corresponding
+ADRs 0001-0007, 0014, 0015 and 0016 are implemented and in use. 0008 (platform layer not built
+yet) stays **Proposed** until the corresponding
 component is deployed and the decision is confirmed.

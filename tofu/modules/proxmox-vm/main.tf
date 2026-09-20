@@ -52,6 +52,11 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   agent {
     enabled = true # guest side is installed by ansible/roles/qemu_guest_agent, not by the image
+
+    # The Ubuntu cloud image has no agent, so a new VM never reports its addresses until Ansible
+    # has installed it, after this apply. The provider's default wait of 15 minutes per VM was
+    # measured in the rebuild from zero (2026-09-20) and only ends in a warning, so wait one.
+    timeout = "1m"
   }
 
   operating_system {
