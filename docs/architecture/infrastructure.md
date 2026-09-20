@@ -10,10 +10,17 @@ Status: design reference — see [`STATUS.md`](../../STATUS.md).
 |---|---|---|---|---|
 | Proxmox host | host | ~2 GB reserved | — | Hypervisor and management |
 | `vpn01` | 1 | 512 MB – 1 GB | 16 GB | VPN gateway / bastion / subnet router |
-| `cp01` | 2 | 2.5–3 GB | 32 GB | Kubernetes control plane + etcd |
+| `cp01` | 2 | 4 GB (was 3 GB) | 32 GB | Kubernetes control plane + etcd |
 | `worker01` | 2 | 3–3.5 GB | 64 GB | Application/platform workloads |
 | `worker02` | 2 | 3–3.5 GB | 64 GB | Application/platform workloads |
-| Headroom | — | ~3–4 GB | ~320 GB | Filesystem cache, bursts, temporary workloads, VM template, backups |
+| Headroom | — | ~2 GB | ~320 GB | Filesystem cache, bursts, temporary workloads, VM template, backups |
+
+`cp01` was raised from 3 GB to 4 GB on 2026-09-20: with the platform running it used 2.3 of
+2.9 GiB (80%), `kube-apiserver` alone about 1.3 GiB. The host showed 15.9 GB total, 3.1 GB
+available and 12.8 GB used before the change, with 11.3 GB configured for the VMs; the extra
+gigabyte leaves about 2 GB for the host, so the next increase has to come from somewhere else
+(a smaller worker, or another machine). The VMs have no balloon and no memory hotplug, so a
+change needs the VM to be stopped and started.
 
 Disk figures assume the 500 GB SSD; generous relative to RAM since disk
 is the less contended resource here. Sized as the OpenTofu module's

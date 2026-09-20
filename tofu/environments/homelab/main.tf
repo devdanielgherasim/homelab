@@ -31,8 +31,10 @@ module "cp01" {
   node_name = var.proxmox_node_name
   pool_id   = var.proxmox_pool
 
-  cores     = 2
-  memory    = 3072 # 2.5-3GB range per infrastructure.md
+  cores = 2
+  # 4GB, up from 3GB: with the platform running (Argo CD, Istio, Prometheus, Cilium) the node
+  # used 2.3 of 2.9 GiB (kube-apiserver alone about 1.3 GiB). See infrastructure.md.
+  memory    = 4096
   disk_size = 32
 
   ip_address = var.cp01_ip
