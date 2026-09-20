@@ -338,8 +338,21 @@ helm, kubernetes, kubectl and random providers, run after Ansible has built the 
     Cilium and Argo CD READMEs, ADR-0014/0015, gitops.md, kubernetes/README.md and the
     comments in the manifests now point to the platform stage; STATUS has a row for it.
     No runbook yet: write it after the from-zero proof (P8), when the steps are known.
-- [ ] P7. One entry point (`make bootstrap` or a script) that chains tofu VMs, Ansible,
+- [x] P7. One entry point (`make bootstrap` or a script) that chains tofu VMs, Ansible,
   kubeconfig, tofu platform.
+  - `scripts/bootstrap.sh` + `make bootstrap`, stages `vms guests cluster host kubeconfig
+    platform` (`vpn` separate), plan and confirmation before each `tofu apply`,
+    `--plan-only`, `--yes`. shellcheck clean.
+  - Tested on the live cluster: `kubeconfig` (real run, `changed=0`, file unchanged, mode
+    600) and `platform` (plan only). Two defects found by that test and fixed: an exported
+    `TF_ENCRYPTION` broke the inventory script (VM state is not encrypted), and Ansible
+    exits 0 when a group is empty, so a stage could "succeed" doing nothing (now
+    `require_hosts`). Failure paths verified: empty inventory exits 1, missing
+    `TF_ENCRYPTION` refuses.
+  - NOT tested: `vms`, `guests`, `cluster`, `host` as a chain; their order is from the
+    playbook headers, proven only by P8.
+  - Open: the platform plan shows 2 comment-only Helm value changes (Cilium, Argo CD);
+    apply them with the next approved platform apply.
 - [ ] P8. Proof from zero: rebuild the cluster VMs and run the chain end to end. Needs
   the owner's explicit approval (destroys and recreates the running cluster; etcd
   backups exist; expected downtime a few hours).

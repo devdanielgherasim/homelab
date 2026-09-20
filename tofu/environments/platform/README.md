@@ -20,6 +20,15 @@ From there Argo CD manages itself and everything under `kubernetes/platform/apps
    the kubeconfig to a private local path.
 3. This stage.
 
+`make bootstrap` (`scripts/bootstrap.sh`) runs the chain in that order as named stages (`vms`,
+`guests`, `cluster`, `host`, `kubeconfig`, `platform`; `vpn` is separate). Every `tofu apply`
+shows its plan and asks first; `make bootstrap ARGS=--plan-only` stops after the plans, and
+`make bootstrap STAGES="kubeconfig platform"` runs only those. The stages `kubeconfig` and
+`platform` (plan only) have been run through it on the live cluster; running the whole chain
+from nothing has not (plan task P8), so the order of the earlier stages is unproven.
+`TF_ENCRYPTION` is kept out of the other stages by the script, because the VM state is not
+encrypted and the Ansible inventory reads it.
+
 ## Prerequisites (all private, none in Git)
 
 - **Kubeconfig** at `~/.kube/homelab.conf` (or `-var kubeconfig_path=...`).

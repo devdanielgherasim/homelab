@@ -13,7 +13,7 @@ ALL ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor fmt lint validate security drift changed-files test-roles
+.PHONY: help doctor fmt lint validate security drift changed-files test-roles bootstrap
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -87,9 +87,11 @@ drift: ## Report drift between declared (Git) and actual infra state — non-mut
 		find ansible/playbooks -name '*.yml' | xargs -r -n1 ansible-playbook --check --diff; \
 	fi
 
-# --- Infrastructure-changing targets: intentionally not implemented yet. ---
-# Adding make infra-plan / infra-apply / cluster / bootstrap here is future
-# work, gated on tofu/ and ansible/ having real content — see STATUS.md and
-# AGENTS.md's destructive-action policy. When added, apply/destroy targets
-# must require explicit confirmation and never be reachable from a hook or
-# CI trigger tied to untrusted input.
+# --- Infrastructure-changing targets. ---
+# `bootstrap` builds the cluster from a bootstrapped Proxmox host (see
+# scripts/bootstrap.sh and ADR-0016). It shows the plan and asks before every
+# `tofu apply`, per AGENTS.md's destructive-action policy, and must never be
+# reachable from a hook or a CI trigger tied to untrusted input. Pass
+# STAGES="vms guests" to run only some stages, ARGS=--plan-only to stop after the plans.
+bootstrap: ## Build the cluster: VMs, kubeadm, kubeconfig, platform stage (asks before each apply)
+	@bash scripts/bootstrap.sh $(ARGS) $(STAGES)
