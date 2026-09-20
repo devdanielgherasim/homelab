@@ -1,0 +1,29 @@
+# kubelet-csr-approver (PostFinance). The kubelets ask the cluster CA for their serving
+# certificate (serverTLSBootstrap, ADR-0018), and Kubernetes never approves those requests by
+# itself. This controller approves the ones that are safe and denies the rest.
+#
+# What it checks for a request of signer kubernetes.io/kubelet-serving: it comes from the
+# node's own identity (system:node:<name>), the name matches providerRegex, there is exactly
+# one DNS name and it is the node's, and the lifetime is at most maxExpirationSeconds.
+
+# Which node names may get a certificate. Update it when a node is named differently.
+providerRegex: '^(cp|worker|burst)[0-9]+$'
+
+# Node names are not in DNS (CoreDNS forwards to a public resolver), so the check that the
+# name resolves to the IP in the certificate cannot pass.
+bypassDnsResolution: true
+
+# Not set: providerIpPrefixes. It would put the real node network in a public repository. The
+# consequence is that the IP addresses in a request are not checked against a range; the
+# requester is still authenticated as that node. See ADR-0018.
+
+# One control plane and a small cluster: one replica is enough, and it is a controller that
+# only acts on new requests.
+replicas: 1
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi

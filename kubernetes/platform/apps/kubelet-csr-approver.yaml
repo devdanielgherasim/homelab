@@ -1,0 +1,40 @@
+# Approves the kubelets' serving-certificate requests (ADR-0018). Without it a kubelet with
+# serverTLSBootstrap keeps waiting for a certificate, and metrics-server cannot verify it.
+# Values and what it checks: kubernetes/platform/system/values-kubelet-csr-approver.yaml.
+#
+# Installed in kube-system next to the components it serves. Wave 3: before metrics-server.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubelet-csr-approver
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://postfinance.github.io/kubelet-csr-approver
+      chart: kubelet-csr-approver
+      targetRevision: 1.2.15
+      helm:
+        releaseName: kubelet-csr-approver
+        valueFiles:
+          - $values/kubernetes/platform/system/values-kubelet-csr-approver.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

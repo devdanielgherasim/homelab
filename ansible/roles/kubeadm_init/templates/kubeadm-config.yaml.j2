@@ -80,3 +80,12 @@ scheduler:
   extraArgs:
     - name: profiling
       value: "false"
+---
+# Read by `kubeadm init` and uploaded to the kubelet-config ConfigMap, which every node that
+# joins gets its kubelet configuration from. The kubelets ask the cluster CA for their serving
+# certificate instead of making a self-signed one, so that clients (metrics-server,
+# Prometheus) can verify them. The certificate requests are approved by kubelet-csr-approver
+# (kubernetes/platform/system/), which Argo CD installs. See ADR-0018.
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+serverTLSBootstrap: true

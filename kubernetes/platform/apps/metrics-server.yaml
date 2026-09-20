@@ -1,0 +1,58 @@
+# The resource metrics API (`kubectl top`, the horizontal pod autoscaler). It verifies the
+# kubelets' certificates with the cluster CA, which needs the kubelets to get theirs from it
+# (serverTLSBootstrap plus kubelet-csr-approver, ADR-0018); until the nodes have them the
+# scrape fails and the API reports no metrics. Values: kubernetes/platform/system/.
+#
+# Installed in kube-system (its priority class is only allowed there). Wave 4: after the
+# approver.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metrics-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://kubernetes-sigs.github.io/metrics-server/
+      chart: metrics-server
+      targetRevision: 3.14.0
+      helm:
+        releaseName: metrics-server
+        valueFiles:
+          - $values/kubernetes/platform/system/values-metrics-server.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  # The chart generates the API server's certificate for metrics-server at render time, so it
+  # is different at every render. Keep the one from the first sync (the Secret and the
+  # APIService's caBundle come from the same render and stay consistent); otherwise the
+  # Application would be OutOfSync all the time. Same approach as for istiod's webhooks.
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: metrics-server
+      jsonPointers:
+        - /data
+    - group: apiregistration.k8s.io
+      kind: APIService
+      name: v1beta1.metrics.k8s.io
+      jsonPointers:
+        - /spec/caBundle
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -39,3 +39,13 @@
   gather_facts: false
   roles:
     - kubelet_hardening
+
+# One node at a time: the kubelet restarts (pods keep running). Nodes and the ConfigMap that new
+# nodes join with are brought to serverTLSBootstrap; kubelet-csr-approver approves the requests.
+- name: Kubelet serving certificates from the cluster CA (ADR-0018)
+  hosts: k8s_nodes
+  serial: 1
+  become: true
+  gather_facts: false
+  roles:
+    - kubelet_server_tls

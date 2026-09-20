@@ -43,6 +43,8 @@ spec:
     - https://blob.istio.io/istio-release/charts
     - https://github.com/kubernetes-sigs/gateway-api.git
     - https://prometheus-community.github.io/helm-charts
+    - https://kubernetes-sigs.github.io/metrics-server/
+    - https://postfinance.github.io/kubelet-csr-approver
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

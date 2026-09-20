@@ -1,0 +1,51 @@
+---
+# Makes the kubelets request their serving certificate from the cluster CA
+# (serverTLSBootstrap) instead of generating a self-signed one. A new cluster gets this from
+# the KubeletConfiguration document in roles/kubeadm_init's kubeadm-config; this role brings
+# a cluster that was built without it to the same state, and is a no-op when it is already there.
+#
+# Until the certificate request is approved (kubelet-csr-approver, installed by Argo CD) the
+# kubelet keeps serving with its self-signed certificate, so restarting it does not cut
+# anything off. Run it one node at a time (`serial: 1` in the playbooks): pods keep running
+# while a kubelet restarts, but there is no reason to restart all of them together.
+
+- name: Look for the kubelet configuration on this node
+  ansible.builtin.stat:
+    path: "{{ kubelet_server_tls_kubelet_config }}"
+  become: true
+  register: kubelet_server_tls_stat
+
+- name: Upload the kubelet configuration to the cluster for nodes that join later
+  # The kubelet-config ConfigMap is what `kubeadm join` reads. It is refreshed from the same
+  # kubeadm-config that carries the KubeletConfiguration document, only when it does not have
+  # the setting yet.
+  when: "'k8s_control_plane' in group_names"
+  block:
+    - name: Read the kubelet-config ConfigMap
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig {{ kubelet_server_tls_admin_conf }} -n kube-system
+          get configmap kubelet-config -o jsonpath={.data.kubelet}
+      become: true
+      changed_when: false
+      check_mode: false # read-only
+      register: kubelet_server_tls_configmap
+
+    - name: Refresh it from the kubeadm configuration
+      ansible.builtin.command:
+        cmd: >-
+          kubeadm init phase upload-config kubelet
+          --config {{ kubelet_server_tls_kubeadm_config }}
+      become: true
+      changed_when: true
+      when: "'serverTLSBootstrap: true' not in kubelet_server_tls_configmap.stdout"
+
+- name: Ask the kubelet on this node for a certificate from the cluster CA
+  ansible.builtin.lineinfile:
+    path: "{{ kubelet_server_tls_kubelet_config }}"
+    regexp: '^serverTLSBootstrap:'
+    line: "serverTLSBootstrap: true"
+    insertafter: '^rotateCertificates:'
+  become: true
+  when: kubelet_server_tls_stat.stat.exists
+  notify: Restart kubelet

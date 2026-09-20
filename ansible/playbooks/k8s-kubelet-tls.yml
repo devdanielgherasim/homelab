@@ -1,0 +1,23 @@
+---
+# Brings the kubelets of an EXISTING cluster to serverTLSBootstrap (ADR-0018): they ask the
+# cluster CA for their serving certificate instead of using a self-signed one. Only this one
+# role, so unlike k8s-harden.yml it does not reconcile the control plane.
+#
+# What it does, per node and one node at a time: adds `serverTLSBootstrap: true` to
+# /var/lib/kubelet/config.yaml and restarts the kubelet (pods keep running). The first node,
+# the control plane, also refreshes the kubelet-config ConfigMap that new nodes join with.
+# Until kubelet-csr-approver (Argo CD) approves the resulting certificate request the kubelet
+# keeps serving with its self-signed certificate, so nothing is cut off. Idempotent.
+#
+# Canary first, then the rest:
+#   ansible-playbook -i inventories/production/ playbooks/k8s-kubelet-tls.yml \
+#     --private-key ~/.ssh/homelab_admin_ed25519 --limit worker02 --check --diff
+#   ... the same without --check and --diff, then without --limit.
+
+- name: Kubelet serving certificates from the cluster CA
+  hosts: k8s_nodes
+  serial: 1
+  become: true
+  gather_facts: false
+  roles:
+    - kubelet_server_tls

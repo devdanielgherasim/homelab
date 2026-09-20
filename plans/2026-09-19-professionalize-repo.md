@@ -104,6 +104,9 @@ is `~/.ssh/homelab_admin_ed25519` inside that WSL distro.
 - [x] 12. Declarative `kubeadm-config.yaml` (control-plane endpoint, kubelet
   serverTLSBootstrapping, encryption-at-rest config, audit policy,
   `skip-phases=addon/kube-proxy` for new clusters).
+  - Correction 2026-09-20: everything in that list was done EXCEPT kubelet
+    serverTLSBootstrapping (ADR-0013 and the CIS report say so: deferred until GitOps).
+    The kubelets still had self-signed serving certificates. Done in task M, ADR-0018.
 - [x] 13. Ansible idempotence: real `changed_when` on command tasks; add
   Molecule or `--check --diff` CI job where feasible.
 - [x] 14. Tofu hardening: VM `protection`, `on_boot`, `reboot_after_update = false`,
@@ -326,6 +329,26 @@ then one integration pass here. Nothing is applied to the cluster without approv
   - Side thread, owner's spare PC (8 GB DDR3, SSD, on only while working, weak CPU): best
     use is a bare-metal Ubuntu burst worker with a taint, not Proxmox and not a backup
     target (it is off at 03:30). Waiting for the CPU model; add a task if wanted.
+
+### M. Metrics API with verified kubelet TLS (owner's request, 2026-09-20; ADR-0018)
+
+`kubectl top` and the autoscaler need metrics-server; it must verify the kubelets, so they need
+serving certificates from the cluster CA (serverTLSBootstrap) and something to approve them.
+
+- [x] M1. Code, validated offline (kubeconform, yamllint, ansible-lint, syntax checks, server-side
+  dry runs, chart renders): `KubeletConfiguration` in the kubeadm template, role
+  `kubelet_server_tls` and playbook `k8s-kubelet-tls.yml`, Applications `kubelet-csr-approver` and
+  `metrics-server` with values under `kubernetes/platform/system/`, chart repositories in the
+  `platform` project, converge test in `scripts/test-roles.sh` (runs in CI; Docker is not
+  available on this machine).
+- [ ] M2. Push; Argo CD installs the approver and metrics-server (idle until the nodes have
+  certificates from the cluster CA).
+- [ ] M3. Canary: `k8s-kubelet-tls.yml --limit worker02` (check mode first). Verify the request is
+  approved, the certificate is signed by the cluster CA with the node's IP, the node stays `Ready`.
+- [ ] M4. The other nodes, one at a time; `kubectl top nodes` and `kubectl top pods` work.
+- [ ] M5. Prometheus's kubelet monitor without `insecureSkipVerify`; targets stay `up`.
+- [ ] M6. Optional, separate approval (restarts the API server): `--kubelet-certificate-authority`
+  on the API server, closing CIS 1.2.5. Prove the whole with a rebuild? Only if the owner wants it.
 
 ### P. Bootstrap as code (owner's requirement, 2026-09-20)
 

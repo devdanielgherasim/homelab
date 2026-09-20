@@ -11,6 +11,8 @@
 #   guest_hardening  beats a cloud-init drop-in, is idempotent, refuses a lock-out.
 #   tailscale        installs from the signed repo, enables forwarding, is idempotent,
 #                    refuses to run without routes. It never joins a tailnet here.
+#   kubelet_server_tls  adds serverTLSBootstrap to the kubelet configuration once, restarts the
+#                    kubelet only when it changed, and refreshes the ConfigMap only when needed.
 #   etcd_backup      installs the units; the snapshot script keeps exactly N copies,
 #                    creates them private, and discards a snapshot that fails
 #                    verification (run against stand-ins for etcdctl/etcdutl).
@@ -206,4 +208,46 @@ fi
 [ "$(docker exec "$NAME" bash -c 'ls /tmp/bk/out/*.partial 2>/dev/null | wc -l')" = "0" ] \
   || fail "etcd_backup: a partial file was left behind"
 
-echo "PASS: guest_hardening, tailscale and etcd_backup converge, are idempotent and refuse bad input"
+# --------------------------------------------------------------- kubelet_server_tls
+echo "== kubelet_server_tls"
+# A kubelet configuration as kubeadm writes it (without the setting), a stand-in kubelet service
+# that systemd really restarts, and stand-ins for kubectl and kubeadm that record what the role
+# asks of the cluster: the ConfigMap starts without the setting, and "kubeadm" adds it.
+docker exec "$NAME" bash -euc '
+  mkdir -p /var/lib/kubelet
+  printf "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nrotateCertificates: true\nruntimeRequestTimeout: 0s\n" > /var/lib/kubelet/config.yaml
+  chmod 600 /var/lib/kubelet/config.yaml
+  printf "[Unit]\nDescription=stand-in kubelet\n[Service]\nExecStart=/bin/sleep infinity\n" > /etc/systemd/system/kubelet.service
+  systemctl daemon-reload
+  systemctl start kubelet
+  printf "rotateCertificates: true\n" > /tmp/kubelet-cm
+  : > /tmp/kubeadm-calls
+  printf "#!/bin/sh\ncat /tmp/kubelet-cm\n" > /usr/local/bin/kubectl
+  printf "#!/bin/sh\necho \"\$*\" >> /tmp/kubeadm-calls\nprintf \"serverTLSBootstrap: true\\\\n\" >> /tmp/kubelet-cm\n" > /usr/local/bin/kubeadm
+  chmod +x /usr/local/bin/kubectl /usr/local/bin/kubeadm
+  printf "%s\n" "- hosts: localhost" "  gather_facts: false" "  roles: [kubelet_server_tls]" > /tmp/kst.yml
+'
+run_kst() {
+  docker exec -e ANSIBLE_CONFIG=/repo/ansible/ansible.cfg -e ANSIBLE_LOCAL_TEMP=/tmp/.ansible \
+    -e ANSIBLE_NOCOLOR=1 -e LC_ALL=C.UTF-8 -e LANG=C.UTF-8 \
+    "$NAME" ansible-playbook -i /tmp/inv.ini /tmp/kst.yml
+}
+pid_before="$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)"
+run_kst >"$logdir/kst-run1.log" 2>&1 || { cat "$logdir/kst-run1.log"; fail "kubelet_server_tls: first run failed"; }
+[ "$(docker exec "$NAME" grep -c '^serverTLSBootstrap: true$' /var/lib/kubelet/config.yaml)" = "1" ] \
+  || fail "kubelet_server_tls: the kubelet configuration does not have the setting exactly once"
+[ "$(docker exec "$NAME" stat -c %a /var/lib/kubelet/config.yaml)" = "600" ] \
+  || fail "kubelet_server_tls: the kubelet configuration lost its root-only mode"
+[ "$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)" != "$pid_before" ] \
+  || fail "kubelet_server_tls: the kubelet was not restarted after the change"
+[ "$(docker exec "$NAME" cat /tmp/kubeadm-calls)" = "init phase upload-config kubelet --config /etc/kubernetes/kubeadm-config.yaml" ] \
+  || fail "kubelet_server_tls: the ConfigMap was not refreshed from the kubeadm configuration"
+pid_after="$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)"
+run_kst >"$logdir/kst-run2.log" 2>&1 || { cat "$logdir/kst-run2.log"; fail "kubelet_server_tls: second run failed"; }
+grep -Eq 'changed=0 ' "$logdir/kst-run2.log" || { cat "$logdir/kst-run2.log"; fail "kubelet_server_tls: not idempotent"; }
+[ "$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)" = "$pid_after" ] \
+  || fail "kubelet_server_tls: an idempotent run restarted the kubelet"
+[ "$(docker exec "$NAME" wc -l < /tmp/kubeadm-calls)" = "1" ] \
+  || fail "kubelet_server_tls: the ConfigMap was refreshed again although it already had the setting"
+
+echo "PASS: guest_hardening, tailscale, etcd_backup and kubelet_server_tls converge, are idempotent and refuse bad input"

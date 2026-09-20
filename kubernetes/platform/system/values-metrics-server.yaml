@@ -1,0 +1,28 @@
+# metrics-server: the resource metrics API (`kubectl top`, and the input of the horizontal pod
+# autoscaler). Installed in kube-system: its priority class, system-cluster-critical, is only
+# allowed there.
+
+replicas: 1
+
+args:
+  # Verify the kubelets' serving certificates with the cluster CA, which is mounted in every
+  # pod. This works because the kubelets get their certificates from that CA (serverTLSBootstrap
+  # and kubelet-csr-approver, ADR-0018). The flag --kubelet-insecure-tls is deliberately not used.
+  - --kubelet-certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+# The API server verifies metrics-server too. The chart generates the certificate; it
+# is a different one at every render, so the Argo CD Application ignores it
+# (kubernetes/platform/apps/metrics-server.yaml).
+tls:
+  type: helm
+apiService:
+  insecureSkipTLSVerify: false
+
+# The chart default asks for 100m and 200Mi, which is a third of a small worker's free memory;
+# metrics-server needs a few tens of MiB for three nodes.
+resources:
+  requests:
+    cpu: 20m
+    memory: 40Mi
+  limits:
+    memory: 128Mi

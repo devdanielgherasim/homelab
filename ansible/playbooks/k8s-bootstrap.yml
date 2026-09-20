@@ -41,3 +41,13 @@
   gather_facts: false
   roles:
     - kubelet_hardening
+
+# A new cluster already has serverTLSBootstrap from kubeadm-config, so this changes nothing
+# there; it is what makes a re-run of the bootstrap safe on a cluster that was built without it.
+- name: Kubelet serving certificates from the cluster CA (ADR-0018)
+  hosts: k8s_nodes
+  serial: 1
+  become: true
+  gather_facts: false
+  roles:
+    - kubelet_server_tls
