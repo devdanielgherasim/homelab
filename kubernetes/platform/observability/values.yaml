@@ -47,6 +47,12 @@ kubelet:
     interval: 30s
     cAdvisorInterval: 30s
     resourceInterval: 30s
+    # The chart skips certificate verification by default because a kubeadm kubelet serves a
+    # self-signed certificate. Here the kubelets get theirs from the cluster CA (serverTLSBootstrap
+    # and kubelet-csr-approver, ADR-0018), which the chart's default tlsConfig already trusts
+    # (ConfigMap kube-root-ca.crt), so verification is on.
+    tlsConfig:
+      insecureSkipVerify: false
 
 prometheusOperator:
   # Webhooks off: they need a certificate-patch job or cert-manager, and the operator's own
