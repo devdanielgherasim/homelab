@@ -70,6 +70,17 @@ spec:
               protocol: TCP
             - port: "8080"
               protocol: TCP
+    # The Kubernetes API server proxies requests to Services, which is how Lens reads
+    # Prometheus (and `kubectl get --raw /api/v1/namespaces/monitoring/services/...`). It
+    # arrives from the node the API server runs on.
+    - fromEntities:
+        - kube-apiserver
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
   egress:
     # API server (service discovery, its own metrics), kubelet and cAdvisor (10250),
     # node-exporter (9100), Cilium agent, operator and Hubble metrics (9962, 9963, 9965).
@@ -141,6 +152,17 @@ spec:
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # The API server's Service proxy (`kubectl get --raw /api/v1/namespaces/monitoring/services/
+    # kube-prometheus-stack-grafana:80/proxy/...`), found by the audit. Same reasoning as for
+    # Prometheus: the caller is already authenticated by the API server.
+    - fromEntities:
+        - kube-apiserver
+        - host
+        - remote-node
       toPorts:
         - ports:
             - port: "3000"

@@ -163,6 +163,9 @@ grafana:
   grafana.ini:
     analytics:
       check_for_updates: false
+      # Found by the network policy audit: without this Grafana calls out to the internet
+      # (its plugin update checker) although nothing here uses plugins from the catalog.
+      check_for_plugin_updates: false
       reporting_enabled: false
     # No anonymous access: everyone signs in. The Service is ClusterIP and reached by
     # port-forward or Tailscale only.

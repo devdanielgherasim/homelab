@@ -37,6 +37,26 @@ run on the host network and are not endpoints, so pod policies do not apply to t
   needs Cilium's DNS proxy (`toFQDNs`); it is left broad because the chart repositories sit
   behind CDNs whose addresses change.
 
+## What the audit found, and what is denied on purpose
+
+Audit run on 2026-09-20 (traffic sampling, then a negative control, then restarts of Grafana,
+the Prometheus operator, kube-state-metrics, the Argo CD repo server and a meshed pod, and two
+syncs of Argo CD itself):
+
+- **Grafana's plugin update check** went to the internet. The check is switched off in
+  `../observability/values.yaml` (`analytics.check_for_plugin_updates`), and the egress stays
+  denied.
+- **The API server's Service proxy** (Lens reading Prometheus, `kubectl get --raw
+  .../services/...:80/proxy/...`) reaches Prometheus and Grafana as `kube-apiserver`, `host` or
+  `remote-node` depending on the node. Both policies allow it.
+- **Denied on purpose:** podinfo probes the cloud metadata address `169.254.169.254:80` at
+  start-up. There is no cloud here, and blocking that address is good practice anyway; the pod
+  starts regardless.
+- **Negative control:** a test pod in `demo` (default-deny, DNS only) reaching another
+  namespace and the internet showed `policy-verdict:none EGRESS AUDITED`, DNS showed
+  `ALLOWED`: the audit does report what enforcement would deny (the report is a
+  `policy-verdict` event, and the Hubble filter is `--verdict AUDIT`).
+
 ## Rolling out or changing a policy
 
 Enforcement cuts traffic the moment it is on, and a missing rule is only visible when
