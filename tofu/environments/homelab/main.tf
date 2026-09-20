@@ -46,15 +46,22 @@ module "cp01" {
 }
 
 locals {
-  # A worker is on the second Proxmox node only when it names a node other than the primary one.
-  primary_workers   = { for name, w in var.workers : name => w if w.node == null || w.node == var.proxmox_node_name }
-  secondary_workers = { for name, w in var.workers : name => w if !(w.node == null || w.node == var.proxmox_node_name) }
+  # A worker is on the primary Proxmox node when it names no node or names that one; otherwise on
+  # the node it names, which sits in one of the three provider slots (see var.proxmox_nodes).
+  primary_workers = { for name, w in var.workers : name => w if w.node == null || w.node == var.proxmox_node_name }
+  workers_on_slot = {
+    for slot in [1, 2, 3] : slot => {
+      for name, w in var.workers : name => w
+      if w.node != null && try(var.proxmox_nodes[w.node].slot == slot, false)
+    }
+  }
 }
 
 # The worker pool. One module instance per entry of var.workers, so adding or
 # removing a worker is a change to that map and nothing else. A provider cannot be
 # chosen per for_each item, so the workers of each Proxmox node are their own module
-# call (below for the second node); the two are the same module with another provider.
+# call: `workers` for the primary node and `workers_node1..3` for the nodes of
+# var.proxmox_nodes, all the same module with another provider.
 module "workers" {
   source   = "../../modules/proxmox-vm"
   for_each = local.primary_workers
@@ -76,17 +83,17 @@ module "workers" {
   tags            = ["homelab", "worker"]
 }
 
-# The workers placed on the second, standalone Proxmox node: same module, its own provider.
-module "workers_secondary" {
+# Workers on the extra Proxmox nodes. A node's slot decides which of these it uses.
+module "workers_node1" {
   source    = "../../modules/proxmox-vm"
-  for_each  = local.secondary_workers
-  providers = { proxmox = proxmox.secondary }
+  for_each  = local.workers_on_slot[1]
+  providers = { proxmox = proxmox.node1 }
 
   name      = each.key
   vmid      = each.value.vmid
   node_name = each.value.node
   pool_id   = var.proxmox_pool
-  cpu_type  = var.secondary_cpu_type
+  cpu_type  = var.proxmox_nodes[each.value.node].cpu_type
 
   cores     = each.value.cores
   memory    = each.value.memory
@@ -98,6 +105,58 @@ module "workers_secondary" {
   ssh_public_keys = var.ssh_public_keys
   dns_servers     = var.dns_servers
   tags            = ["homelab", "worker"]
+}
+
+module "workers_node2" {
+  source    = "../../modules/proxmox-vm"
+  for_each  = local.workers_on_slot[2]
+  providers = { proxmox = proxmox.node2 }
+
+  name      = each.key
+  vmid      = each.value.vmid
+  node_name = each.value.node
+  pool_id   = var.proxmox_pool
+  cpu_type  = var.proxmox_nodes[each.value.node].cpu_type
+
+  cores     = each.value.cores
+  memory    = each.value.memory
+  disk_size = each.value.disk_size
+
+  ip_address = each.value.ip_address
+  gateway    = var.network_gateway
+
+  ssh_public_keys = var.ssh_public_keys
+  dns_servers     = var.dns_servers
+  tags            = ["homelab", "worker"]
+}
+
+module "workers_node3" {
+  source    = "../../modules/proxmox-vm"
+  for_each  = local.workers_on_slot[3]
+  providers = { proxmox = proxmox.node3 }
+
+  name      = each.key
+  vmid      = each.value.vmid
+  node_name = each.value.node
+  pool_id   = var.proxmox_pool
+  cpu_type  = var.proxmox_nodes[each.value.node].cpu_type
+
+  cores     = each.value.cores
+  memory    = each.value.memory
+  disk_size = each.value.disk_size
+
+  ip_address = each.value.ip_address
+  gateway    = var.network_gateway
+
+  ssh_public_keys = var.ssh_public_keys
+  dns_servers     = var.dns_servers
+  tags            = ["homelab", "worker"]
+}
+
+# The first extra node was called `workers_secondary` before there were slots.
+moved {
+  from = module.workers_secondary
+  to   = module.workers_node1
 }
 
 # The two workers used to be separate module calls. These tell OpenTofu that the

@@ -63,7 +63,8 @@ variable "workers" {
     Git, so this map is the whole definition of the worker pool.
 
     Sizing defaults match docs/architecture/infrastructure.md. The host has
-    about 16 GB of RAM in total: check the sum of all VM memory before adding one.
+    about 16 GB of RAM in total, and a second node has its own: check the sum of the VM memory
+    on the node before adding one.
   EOT
   type = map(object({
     vmid       = number
@@ -97,9 +98,9 @@ variable "workers" {
   validation {
     condition = alltrue([
       for name, w in var.workers :
-      w.node == null || w.node == var.proxmox_node_name || try(w.node == var.secondary_proxmox.node_name, false)
+      w.node == null || w.node == var.proxmox_node_name || contains(keys(var.proxmox_nodes), w.node)
     ])
-    error_message = "A worker's node must be the primary node (proxmox_node_name) or the secondary_proxmox node_name, and the secondary node has to be configured first."
+    error_message = "A worker's node must be the primary node (proxmox_node_name) or one of the proxmox_nodes, and the node has to be added there first."
   }
 
   validation {
@@ -108,30 +109,50 @@ variable "workers" {
   }
 }
 
-variable "secondary_proxmox" {
+variable "proxmox_nodes" {
   description = <<-EOT
-    A second, standalone Proxmox node (not a cluster: two nodes would lose quorum whenever one
-    is switched off). Leave null for a single-host lab. When set, a worker can be placed on it
-    with `node = "<node_name>"`. The endpoint is the address of its API, for example
-    "https://pve02.example.lan:8006/". Its API token is not a variable of this file: give it in the
-    environment as TF_VAR_secondary_proxmox_api_token.
+    More Proxmox nodes besides the primary one (proxmox_node_name), each standalone: a
+    cluster of two would lose quorum whenever one machine is switched off. Keyed by the
+    node's name, which is also its name in the Ansible inventory. A worker is placed on a node
+    with `node = "<name>"`; without it, on the primary node. Empty for a single-host lab.
+
+    endpoint  Address of the node's API, for example "https://10.10.10.20:8006/".
+    slot      1 to 3. OpenTofu cannot create a provider per map entry, so there are three fixed
+              provider slots, and the slot is the node's identity in the state. Never change it
+              for a node that holds VMs (that would recreate them), and never reuse it.
+    cpu_type  QEMU CPU type of the VMs on this node. The default is a fixed baseline: the
+              machine may be older than the primary one (Ivy Bridge: AES-NI and SSE4.2, no AVX2),
+              and what runs in a VM should not depend on which machine it landed on.
+
+    API tokens are not part of this variable: they come from the environment
+    (TF_VAR_proxmox_node_tokens), see scripts/bootstrap.sh.
   EOT
-  type = object({
-    node_name = string
-    endpoint  = string
-  })
-  default = null
+  type = map(object({
+    endpoint = string
+    slot     = number
+    cpu_type = optional(string, "x86-64-v2-AES")
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for name, n in var.proxmox_nodes : contains([1, 2, 3], n.slot)])
+    error_message = "The slot of a node is 1, 2 or 3 (there are three fixed provider slots)."
+  }
+
+  validation {
+    condition     = length(distinct([for name, n in var.proxmox_nodes : n.slot])) == length(var.proxmox_nodes)
+    error_message = "Every node needs its own slot."
+  }
+
+  validation {
+    condition     = !contains(keys(var.proxmox_nodes), var.proxmox_node_name)
+    error_message = "proxmox_nodes lists the nodes besides the primary one; the primary node is proxmox_node_name."
+  }
 }
 
-variable "secondary_proxmox_api_token" {
-  description = "API token of the second Proxmox node, as `user@realm!tokenid=secret`. From the environment (TF_VAR_secondary_proxmox_api_token), never a file in the repository."
-  type        = string
-  default     = null
+variable "proxmox_node_tokens" {
+  description = "API tokens of the nodes in proxmox_nodes, by node name, each as `user@realm!tokenid=secret`. From the environment (TF_VAR_proxmox_node_tokens, JSON), never a file in the repository."
+  type        = map(string)
+  default     = {}
   sensitive   = true
-}
-
-variable "secondary_cpu_type" {
-  description = "QEMU CPU type for VMs on the second node. Its CPU is older than the first host's, so it gets a fixed baseline instead of `host` (Ivy Bridge: AES-NI and SSE4.2, no AVX2)."
-  type        = string
-  default     = "x86-64-v2-AES"
 }

@@ -24,14 +24,32 @@ provider "proxmox" {
   # feature needs it (e.g. direct file uploads).
 }
 
-# The second, standalone Proxmox node (var.secondary_proxmox). Unused, and never contacted,
-# while no worker is placed on it. Its endpoint is a variable because a provider
-# cannot read a second set of environment variables; its token comes from
-# TF_VAR_secondary_proxmox_api_token. Each node has its own CA: SSL_CERT_FILE has to
-# point at a bundle holding both (see docs/proxmox/installation.md).
+# The extra, standalone Proxmox nodes (var.proxmox_nodes): three fixed provider slots, because a
+# provider cannot be created per map entry. A slot nobody uses is never contacted. The endpoint
+# comes from the node's entry and its token from TF_VAR_proxmox_node_tokens, since a provider
+# cannot read a second set of environment variables. Each node has its own CA: SSL_CERT_FILE
+# has to point at a bundle holding all of them (see docs/proxmox/installation.md).
+locals {
+  node_by_slot = { for name, n in var.proxmox_nodes : n.slot => name }
+}
+
 provider "proxmox" {
-  alias     = "secondary"
-  endpoint  = try(var.secondary_proxmox.endpoint, null)
-  api_token = var.secondary_proxmox_api_token
+  alias     = "node1"
+  endpoint  = try(var.proxmox_nodes[local.node_by_slot[1]].endpoint, null)
+  api_token = try(var.proxmox_node_tokens[local.node_by_slot[1]], null)
+  insecure  = var.proxmox_insecure
+}
+
+provider "proxmox" {
+  alias     = "node2"
+  endpoint  = try(var.proxmox_nodes[local.node_by_slot[2]].endpoint, null)
+  api_token = try(var.proxmox_node_tokens[local.node_by_slot[2]], null)
+  insecure  = var.proxmox_insecure
+}
+
+provider "proxmox" {
+  alias     = "node3"
+  endpoint  = try(var.proxmox_nodes[local.node_by_slot[3]].endpoint, null)
+  api_token = try(var.proxmox_node_tokens[local.node_by_slot[3]], null)
   insecure  = var.proxmox_insecure
 }

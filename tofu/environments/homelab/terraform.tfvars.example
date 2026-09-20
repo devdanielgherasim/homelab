@@ -25,12 +25,12 @@ workers = {
   worker02 = { vmid = 104, ip_address = "10.10.10.14/24" }
 }
 
-# Optional: a second, standalone Proxmox node, and a worker placed on it. Its API token
-# goes in the environment (TF_VAR_secondary_proxmox_api_token), never in this file, and
-# SSL_CERT_FILE has to hold the root CA of both nodes.
-# secondary_proxmox = {
-#   node_name = "pve02"
-#   endpoint  = "https://YOUR_SECOND_PROXMOX_MGMT_IP_HERE:8006/"
+# Optional: more, standalone Proxmox nodes, and workers placed on them. Their API tokens go in
+# the environment (TF_VAR_proxmox_node_tokens, made by scripts/bootstrap.sh), never in this file,
+# and SSL_CERT_FILE has to hold the root CA of every node. `slot` is 1 to 3 and is the node's
+# identity in the state: do not change it once the node holds VMs.
+# proxmox_nodes = {
+#   pve02 = { endpoint = "https://YOUR_SECOND_PROXMOX_MGMT_IP_HERE:8006/", slot = 1 }
 # }
 # workers = {
 #   worker01 = { vmid = 103, ip_address = "10.10.10.13/24" }

@@ -10,7 +10,9 @@ output "workers" {
   description = "The worker pool, by name."
   value = merge(
     { for name, w in module.workers : name => { vm_id = w.vm_id, ip_address = w.ip_address } },
-    { for name, w in module.workers_secondary : name => { vm_id = w.vm_id, ip_address = w.ip_address } },
+    { for name, w in module.workers_node1 : name => { vm_id = w.vm_id, ip_address = w.ip_address } },
+    { for name, w in module.workers_node2 : name => { vm_id = w.vm_id, ip_address = w.ip_address } },
+    { for name, w in module.workers_node3 : name => { vm_id = w.vm_id, ip_address = w.ip_address } },
   )
 }
 
@@ -27,6 +29,8 @@ output "nodes" {
       cp01  = { role = "control-plane", proxmox_host = var.proxmox_node_name, vm_id = module.cp01.vm_id, ip_address = module.cp01.ip_address }
     },
     { for name, w in module.workers : name => { role = "worker", proxmox_host = var.proxmox_node_name, vm_id = w.vm_id, ip_address = w.ip_address } },
-    { for name, w in module.workers_secondary : name => { role = "worker", proxmox_host = local.secondary_workers[name].node, vm_id = w.vm_id, ip_address = w.ip_address } },
+    { for name, w in module.workers_node1 : name => { role = "worker", proxmox_host = local.workers_on_slot[1][name].node, vm_id = w.vm_id, ip_address = w.ip_address } },
+    { for name, w in module.workers_node2 : name => { role = "worker", proxmox_host = local.workers_on_slot[2][name].node, vm_id = w.vm_id, ip_address = w.ip_address } },
+    { for name, w in module.workers_node3 : name => { role = "worker", proxmox_host = local.workers_on_slot[3][name].node, vm_id = w.vm_id, ip_address = w.ip_address } },
   )
 }
