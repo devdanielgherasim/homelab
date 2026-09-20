@@ -247,7 +247,7 @@ run_kst >"$logdir/kst-run2.log" 2>&1 || { cat "$logdir/kst-run2.log"; fail "kube
 grep -Eq 'changed=0 ' "$logdir/kst-run2.log" || { cat "$logdir/kst-run2.log"; fail "kubelet_server_tls: not idempotent"; }
 [ "$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)" = "$pid_after" ] \
   || fail "kubelet_server_tls: an idempotent run restarted the kubelet"
-[ "$(docker exec "$NAME" wc -l < /tmp/kubeadm-calls)" = "1" ] \
+[ "$(docker exec "$NAME" bash -c 'wc -l < /tmp/kubeadm-calls')" = "1" ] \
   || fail "kubelet_server_tls: the ConfigMap was refreshed again although it already had the setting"
 
 echo "PASS: guest_hardening, tailscale, etcd_backup and kubelet_server_tls converge, are idempotent and refuse bad input"
