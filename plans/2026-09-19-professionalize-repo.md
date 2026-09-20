@@ -419,13 +419,19 @@ the worker gets 2 vCPUs. 8 GB: about 6.5 GB for VMs; a 16 GB DDR3 upgrade is che
   admission, metrics-server, the CSR approver, Argo CD's Redis). Kyverno fails open and the mesh keeps
   its sidecar configuration meanwhile. Pods stay on worker01 after the move; nothing rebalances them
   by itself. The state is temporary anyway: the point of the move is that `cp01` then gets 6 GiB.
-- [ ] R5. Move `worker02`: cordon and drain, delete the node, plan and apply (destroys the VM on
-  `pve01`, creates it on `pve02` with the same name, VMID and address), Ansible guest stages and
-  join, uncordon. The old VM is stopped, not destroyed, until the new one is verified.
-- [ ] R6. Verify: node `Ready` on the new host, Cilium 3/3, the certificate request approved,
-  metrics, pods rescheduled, Prometheus targets, then destroy the old VM. Give `cp01` more memory
-  (6 GiB, restart about 50 s) and record the new sizing table.
-- [ ] R7. Document: runbook for a node on a second host, STATUS, `infrastructure.md`.
+- [x] R5. Move `worker02` (2026-09-20). Done as approved steps: drain and delete the node (10 pods
+  rescheduled, none left not ready), the old VM shut down through the guest agent and taken out of
+  the state with a backup (it stays on `pve01`, stopped, `onboot` 0, protected), one plan (1 to add,
+  nothing else), the apply of exactly that plan (about 4 minutes: the disk clone and the wait for the
+  guest agent), then `bootstrap.sh guests cluster host`. The VM has 5.5 GiB and 3 vCPU: `pve02`
+  reports about 6.3 GiB available and the host itself keeps about 1.5 GiB.
+- [ ] R6. Verify and finish. Verified: `worker02` `Ready` on `pve02` (5.2 GiB allocatable), Cilium on
+  all three nodes, both certificate requests approved, metrics, 17 of 17 Applications `Synced/Healthy`,
+  no pod left not running. `cp01` raised to 6 GiB: the API was down 46 s, and the node is at about 33%
+  right after the restart (measure again after a day). Left: destroy the old VM 104 on `pve01`
+  (destructive, needs the owner's decision) and re-measure the control plane after a day.
+- [x] R7. Document: the runbook, STATUS and the sizing table in `infrastructure.md` (the runbook says
+  which parts were run for real).
 - [ ] R8. Make adding a Proxmox node or a worker one command (owner's request, 2026-09-20: "mostly
   automatic"). Done: the `proxmox_nodes` map with three provider slots (tested against the real
   state: no change), a temporary OpenTofu session per Proxmox host, opened and closed by

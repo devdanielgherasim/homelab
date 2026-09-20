@@ -4,16 +4,16 @@ Status: design reference — see [`STATUS.md`](../../STATUS.md).
 
 ## Compute and memory allocation
 
-16 GB RAM is the hard ceiling. Allocations are deliberately conservative.
+Each Proxmox host has its own RAM ceiling: 16 GB on the first (`pve01`, the laptop) and 8 GB on the second (`pve02`, [ADR-0020](../adr/0020-second-standalone-proxmox-node.md)). Allocations are deliberately conservative. The table below is per host: `vpn01`, `cp01` and `worker01` on `pve01`, `worker02` on `pve02`.
 
 | VM / host | vCPU | RAM | Disk | Role |
 |---|---|---|---|---|
 | Proxmox host | host | ~2 GB reserved | — | Hypervisor and management |
 | `vpn01` | 1 | 512 MB – 1 GB | 16 GB | VPN gateway / bastion / subnet router |
-| `cp01` | 2 | 4 GB (was 3 GB) | 32 GB | Kubernetes control plane + etcd |
+| `cp01` | 2 | 6 GB (was 4, and 3 before) | 32 GB | Kubernetes control plane + etcd |
 | `worker01` | 2 | 3–3.5 GB | 64 GB | Application/platform workloads |
-| `worker02` | 2 | 3–3.5 GB | 64 GB | Application/platform workloads |
-| Headroom | — | ~2 GB | ~320 GB | Filesystem cache, bursts, temporary workloads, VM template, backups |
+| `worker02` (second Proxmox node) | 3 | 5.5 GB | 64 GB | Application/platform workloads; runs on `pve02`, which has its own 8 GB |
+| Headroom | — | ~3.4 GB on `pve01`, ~0.4 GB on `pve02` | ~320 GB | Filesystem cache, bursts, temporary workloads, VM template, backups |
 
 `cp01` was raised from 3 GB to 4 GB on 2026-09-20: with the platform running it used 2.3 of
 2.9 GiB (80%), `kube-apiserver` alone about 1.3 GiB. The host showed 15.9 GB total, 3.1 GB
@@ -31,6 +31,18 @@ CRDs installed), so that figure is its baseline and not something that accumulat
 need the API server restarted while it was down (kube-state-metrics four times, CoreDNS, the
 Cilium operator, the certificate approver, the Argo CD repo server); nothing was lost and every
 Prometheus target was back within two minutes.
+
+Raised again the same day, from 4 GB to 6 GB, once Kyverno had taken it to 74% (see
+[ADR-0019](../adr/0019-kyverno-admission-policy.md)) and `worker02` had been moved to the second
+Proxmox node (ADR-0020), which freed the memory on the first host. Same procedure: the plan
+showed one in-place change (`4096 -> 6144`), the apply left the memory pending in Proxmox, and `cp01`
+was shut down through the guest agent and started again. The API server was unavailable for 46
+seconds, all 17 Argo CD Applications were `Synced/Healthy` and no pod was left not running
+afterwards. Measured after the restart: 5.9 GB in the VM, 2.3 GB used and 3.6 GB available, with
+`kube-apiserver` at about 1.4 GiB resident right after its fresh start. That leaves the control plane
+at about 33% by the metrics API against 74% before (right after a fresh start, so it will grow
+back towards the earlier working set; measure again after a day), so the Trivy operator and further CRD-heavy
+components can be weighed again (ADR-0019). `pve01` keeps about 3.2 GB free after the change.
 
 Disk figures assume the 500 GB SSD; generous relative to RAM since disk
 is the less contended resource here. Sized as the OpenTofu module's
