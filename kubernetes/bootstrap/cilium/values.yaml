@@ -79,12 +79,13 @@ dashboards:
   annotations:
     grafana_folder: Cilium
 
-# Network policy audit mode: policies are evaluated and Hubble reports the verdict `AUDIT` for
-# what they WOULD deny, but nothing is denied. On while the default-deny policies of
-# kubernetes/platform/policies/ are introduced, so that a rule that was missed shows up in
-# Hubble instead of cutting a service. Set to false (a Cilium restart) to enforce. See
-# kubernetes/platform/policies/README.md for the order.
-policyAuditMode: true
+# Network policy audit mode: when true, policies are evaluated and Hubble reports what they
+# WOULD deny, but nothing is denied. It was on while the default-deny policies of
+# kubernetes/platform/policies/ were introduced, so that a rule that was missed showed up in
+# Hubble instead of cutting a service; the audit ran clean on 2026-09-20 and enforcement was
+# switched on (false). Set it to true again (a Cilium restart) to test a new policy or to back
+# out quickly. See kubernetes/platform/policies/README.md.
+policyAuditMode: false
 
 # Restart the agents by themselves when the ConfigMap changes: Helm does not, and the agents
 # keep the old setting (seen with l2announcements, ADR-0015).
