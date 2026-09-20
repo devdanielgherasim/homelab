@@ -1,0 +1,49 @@
+# Kyverno, the admission controller that checks workloads against policy (ADR-0019). Values and
+# what was left out: kubernetes/platform/policies/kyverno/values.yaml. The policies themselves
+# are a separate Application (kyverno-policies.yaml), applied after this one has installed the
+# CRDs and the webhooks are up.
+#
+# The `kyverno` namespace is created here and enforces the `restricted` Pod Security profile;
+# every pod of the chart satisfies it (checked on the rendered chart).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://kyverno.github.io/kyverno/
+      chart: kyverno
+      targetRevision: 3.9.1
+      helm:
+        releaseName: kyverno
+        valueFiles:
+          - $values/kubernetes/platform/policies/kyverno/values.yaml
+    - repoURL: https://github.com/devdanielgherasim/homelab.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The CRDs are hundreds of KiB each, more than client-side apply's annotation can hold.
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/audit: restricted
+        pod-security.kubernetes.io/warn: restricted
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

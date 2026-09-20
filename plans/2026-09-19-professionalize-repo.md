@@ -371,6 +371,30 @@ serving certificates from the cluster CA (serverTLSBootstrap) and something to a
 - [ ] M6. Optional, separate approval (restarts the API server): `--kubelet-certificate-authority`
   on the API server, closing CIS 1.2.5. Prove the whole with a rebuild? Only if the owner wants it.
 
+### K. Kyverno (G5 step 2, 2026-09-20; ADR-0019)
+
+Admission policy for what Pod Security admission and network policy do not cover: pinned image
+tags, resource requests and limits, trusted registries, no NodePort, no unapproved `privileged`
+namespaces. Audit first, fail open.
+
+- [x] K1. Research and design, offline: chart 3.9.1 (Kyverno v1.19.1); the legacy policy types
+  are deprecated, so the new `ValidatingPolicy` (CEL) only; 22 CRDs and 5.6 MiB of schema by
+  default, 18 and 2.5 MiB with the legacy group off (the chart ignores the switches for the
+  `policies.kyverno.io` group: found by reading the sub-chart, not assumed); validation only
+  (background and cleanup controllers off); about 190 MiB of requests; every pod restricted
+  compliant (checked on the render). Application, values and ADR-0019 (Proposed) written.
+- [ ] K2. Push and install; measure on the cluster: API server memory before and after, node
+  memory, webhook configurations, `kubectl` latency; check that the Application is
+  `Synced/Healthy` and nothing else moved. Verify what Argo CD does with the chart's pre-delete
+  hook.
+- [ ] K3. Policies in Audit (`ValidatingPolicy`, `failurePolicy: Ignore`): disallow `latest` and
+  untagged images, require requests and a memory limit, registry allowlist, no NodePort Services,
+  `privileged` Pod Security label only on an allowlist of namespaces. Read the policy reports,
+  fix or except what they show, prove each policy with a resource that must be reported.
+- [ ] K4. Move the clean policies to Deny, one at a time, with a negative control each.
+- [ ] K5. Network policy for the `kyverno` namespace (webhook ingress from the API server, API
+  server and DNS egress), through Cilium audit mode as in ADR-0017.
+
 ### Q. Control-plane memory (2026-09-20)
 
 `cp01` was at 80% memory (2.3 of 2.9 GiB) with the platform running.

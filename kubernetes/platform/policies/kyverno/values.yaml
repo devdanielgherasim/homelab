@@ -1,0 +1,71 @@
+# Kyverno (chart 3.9.1, Kyverno v1.19.1), trimmed for a small cluster and for validation only.
+# Design and reasons: ADR-0019. Installed by kubernetes/platform/apps/kyverno.yaml.
+
+# --- CRDs ---------------------------------------------------------------------------------
+# The API server already holds 48 CRDs and about 1.2 GiB. The chart's 22 CRDs are 5.6 MiB of
+# schema, and the two legacy policy types alone (ClusterPolicy and Policy) are 1.4 MiB each; the
+# chart marks them deprecated in favour of the `policies.kyverno.io` types. This cluster uses the
+# new ValidatingPolicy (CEL) type only, so only what it and the reports need is installed.
+crds:
+  install: true
+  groups:
+    kyverno:
+      # Small, and the controllers watch them; the large legacy policy types are off.
+      cleanuppolicies: false
+      clustercleanuppolicies: false
+      clusterpolicies: false
+      globalcontextentries: true
+      policies: false
+      policyexceptions: true
+      updaterequests: true
+    # The `policies.kyverno.io` group (ValidatingPolicy and its siblings, 18 CRDs in all, 2.5 MiB)
+    # has no switches that work: chart 3.9.1 lists `crds.groups.policies.*` in its values, but the
+    # kyverno-api sub-chart that carries those CRDs is gated only by `crds.install`, so setting
+    # them to false changes nothing (checked with `helm template`). It is installed whole.
+    reports:
+      clusterephemeralreports: true
+      ephemeralreports: true
+    wgpolicyk8s:
+      clusterpolicyreports: true
+      policyreports: true
+  # The migration Job moves stored objects to a new CRD version; it is only needed when the
+  # chart is upgraded, and Argo CD would run it on every sync. Turn it on for an upgrade and read
+  # the release notes first.
+  migration:
+    enabled: false
+
+# --- Components ---------------------------------------------------------------------------
+# Admission controller: serves the webhooks the API server calls. One replica (one control
+# plane, and the workers have little memory); the policies below fail open, so it being down does
+# not stop the cluster.
+admissionController:
+  replicas: 1
+  container:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 384Mi
+
+# Background scans of existing resources and the policy reports.
+reportsController:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+# Not used by validation-only policies: mutate-existing and generate (background controller),
+# and scheduled deletion (cleanup controller).
+backgroundController:
+  enabled: false
+cleanupController:
+  enabled: false
+
+# Removes Kyverno's webhook configurations when the release is deleted. The webhooks are created
+# by the controller at run time, not by Helm, so without this an uninstall would leave webhooks
+# that point at nothing.
+webhooksCleanup:
+  enabled: true
