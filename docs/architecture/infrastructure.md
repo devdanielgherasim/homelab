@@ -22,6 +22,16 @@ gigabyte leaves about 2 GB for the host, so the next increase has to come from s
 (a smaller worker, or another machine). The VMs have no balloon and no memory hotplug, so a
 change needs the VM to be stopped and started.
 
+Applied the same day: `tofu apply` changed the configuration (the memory showed as pending in
+Proxmox and nothing restarted), then `cp01` was shut down cleanly through the guest agent (8 s)
+and started again. The API server was unavailable for about 50 seconds, not the several minutes
+that had been expected. Afterwards the node has 3.9 GB, uses 64% instead of 80%, and the API
+server still holds about 1.2 GiB right after a fresh start (heap in use 1.1 GiB, with 48
+CRDs installed), so that figure is its baseline and not something that accumulated. Pods that
+need the API server restarted while it was down (kube-state-metrics four times, CoreDNS, the
+Cilium operator, the certificate approver, the Argo CD repo server); nothing was lost and every
+Prometheus target was back within two minutes.
+
 Disk figures assume the 500 GB SSD; generous relative to RAM since disk
 is the less contended resource here. Sized as the OpenTofu module's
 defaults (`tofu/modules/proxmox-vm/`) — adjust both together if changed.

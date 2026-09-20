@@ -371,6 +371,27 @@ serving certificates from the cluster CA (serverTLSBootstrap) and something to a
 - [ ] M6. Optional, separate approval (restarts the API server): `--kubelet-certificate-authority`
   on the API server, closing CIS 1.2.5. Prove the whole with a rebuild? Only if the owner wants it.
 
+### Q. Control-plane memory (2026-09-20)
+
+`cp01` was at 80% memory (2.3 of 2.9 GiB) with the platform running.
+
+- [x] Q1. Raised to 4096 MiB (`f891177`, code and sizing table). Checked the host first (15.9 GB
+  total, 3.1 GB available, 11.3 GB configured for the VMs, no balloon and no hotplug, so a
+  restart is needed); 4 GB leaves about 2 GB for the host, and that is the limit.
+- [x] Q2. `tofu apply` with a temporary token, owner's approval. The plan was checked in code to
+  contain only cp01's memory and `agent.timeout` on the four VMs (no destroy or replace), a fresh
+  etcd snapshot and PKI archive were copied off the host first, the memory showed as pending and
+  nothing restarted, the plan was empty afterwards, and the token was removed.
+- [x] Q3. Clean shutdown and start of `cp01`, owner's approval. API server unavailable about 50 s
+  (announced: 3-4 minutes, too pessimistic). Node `Ready` with 3.9 GB and 64% used, etcd ok,
+  16 of 16 Applications `Synced/Healthy`, 27 of 27 Prometheus targets `up`, Gateway 20 of 20,
+  Cilium 3/3 reachable. What I had said was wrong: pods that need the API server did restart
+  (kube-state-metrics four times, CoreDNS, Cilium operator, certificate approver, Argo CD repo
+  server), without data loss.
+- [ ] Q4. Later: why `kube-apiserver` holds about 1.2 GiB even after a fresh start (heap in use
+  1.1 GiB). Not a leak; the likely cause is the 48 CRDs (large schemas in the discovery and watch
+  caches). Levers if it matters: `--default-watch-cache-size`, `GOMEMLIMIT`, fewer CRDs.
+
 ### P. Bootstrap as code (owner's requirement, 2026-09-20)
 
 "No manual steps in the bootstrap; everything in Git and reproducible from zero."
