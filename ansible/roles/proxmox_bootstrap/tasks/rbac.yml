@@ -82,10 +82,22 @@
       {{ (proxmox_bootstrap_pool_state.stdout | from_json)
          if (proxmox_bootstrap_pool_state.stdout | default('') | trim | length > 0) else {} }}
 
+- name: Read the VMs and templates that exist on this Proxmox host
+  # With more than one standalone Proxmox node, the list of lab VMIDs covers
+  # all of them, and pvesh refuses a VMID this host does not have.
+  ansible.builtin.command:
+    cmd: "pvesh get /cluster/resources --type vm --output-format json"
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_bootstrap_local_vms
+
 - name: List the VMs missing from the pool
   ansible.builtin.set_fact:
     proxmox_bootstrap_pool_missing: >-
       {{ proxmox_bootstrap_pool_vmids | map('string') | list
+         | intersect(
+             (proxmox_bootstrap_local_vms.stdout | from_json)
+             | selectattr('vmid', 'defined') | map(attribute='vmid') | map('string') | list)
          | difference(
              (proxmox_bootstrap_pool_info.members | default([]))
              | selectattr('vmid', 'defined') | map(attribute='vmid') | map('string') | list) }}
