@@ -11,6 +11,7 @@ are deliberately not here yet; see [Deferred](#deferred).
 | `values.yaml` | Chart values, commented with the reason for each choice |
 | `dashboards/` | Grafana dashboards as ConfigMaps (`grafana_dashboard: "1"`), loaded by the Grafana sidecar |
 | `rules/capacity-rules.yaml` | `PrometheusRule`: capacity recording rules and two alerts |
+| `monitors/cilium.yaml` | `PodMonitor`s for the Cilium agent, Hubble flow metrics and the Cilium operator |
 
 ## Components and versions
 
@@ -178,6 +179,19 @@ If Grafana is stuck in `CreateContainerConfigError`, the `grafana-admin` Secret 
 dashboard ConfigMap is not picked up, check its namespace is `monitoring` and it carries the label
 `grafana_dashboard: "1"`.
 
+## Cilium and Hubble metrics
+
+Cilium's chart values (`kubernetes/bootstrap/cilium/values.yaml`) switch on the metrics endpoints
+(agent, Hubble flows, operator) and the six Grafana dashboards, which land as ConfigMaps in
+`monitoring` in the folder "Cilium". They do **not** switch on the chart's `ServiceMonitor`s: that
+chart is installed by the platform stage before Argo CD and before this stack's CRDs exist, so a
+`ServiceMonitor` there would fail on a cluster built from zero. The scrape configuration is
+`monitors/cilium.yaml` instead: three `PodMonitor`s that select the pods directly (agent on port
+`prometheus`, Hubble flows on `hubble-metrics`, operator on `prometheus`), applied by Argo CD after
+the CRDs are there. Envoy is off, so it has no monitor. The Hubble metric list is short on
+purpose (`dns`, `drop`, `tcp`, `flow`, `icmp`): flow metrics add many series, so watch the
+Prometheus memory limit before adding more (`prometheus_tsdb_head_series` and the working set).
+
 ## Deferred
 
 - **Logs (Loki).** Use the charts published by the `grafana-community` organisation (the Grafana
@@ -187,51 +201,6 @@ dashboard ConfigMap is not picked up, check its namespace is `monitoring` and it
   in this namespace (label `grafana_datasource: "1"`), which the data source sidecar already
   watches.
 - **Traces (Tempo).** After logs.
-- **Cilium and Hubble metrics.** The lead enables these in Cilium's own values, not here. The
-  Prometheus in this stack already selects ServiceMonitors from all namespaces. Recommended keys,
-  checked against `helm show values cilium/cilium --version 1.20.2` and rendered with
-  `helm template` (each of the four ServiceMonitors and three dashboard ConfigMaps appears):
-
-  ```yaml
-  prometheus:
-    enabled: true
-    serviceMonitor:
-      enabled: true
-      interval: 30s          # default is 10s
-  operator:
-    prometheus:
-      enabled: true
-      serviceMonitor:
-        enabled: true
-        interval: 30s
-    dashboards:
-      enabled: true
-      namespace: monitoring  # the Grafana sidecar only reads this namespace
-  envoy:
-    prometheus:
-      enabled: true
-      serviceMonitor:
-        enabled: true
-        interval: 30s
-  hubble:
-    metrics:
-      enabled: ["dns:query;ignoreAAAA", drop, tcp, flow, icmp]
-      serviceMonitor:
-        enabled: true
-        interval: 30s
-      dashboards:
-        enabled: true
-        namespace: monitoring
-  dashboards:
-    enabled: true
-    namespace: monitoring
-    annotations:
-      grafana_folder: Cilium
-  ```
-
-  Sync Cilium's ServiceMonitors only after this stack has installed the CRDs (or set
-  `prometheus.serviceMonitor.trustCRDsExist: true` and the same key under the other components).
-  Hubble metrics add a lot of series; watch the Prometheus memory limit after enabling them.
 - **Istio metrics.** Istio ships ServiceMonitors/PodMonitors the same way; any dashboard ConfigMap
   it creates must land in `monitoring`.
 - **kube-scheduler and etcd scraping.** Needs kubeadm changes first: set `bind-address` for the

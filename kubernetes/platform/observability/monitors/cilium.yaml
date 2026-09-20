@@ -1,0 +1,71 @@
+# Scrape configuration for Cilium and Hubble. The metrics endpoints and the Grafana
+# dashboards are switched on in the Cilium chart values (kubernetes/bootstrap/cilium/); the
+# ServiceMonitor objects of that chart are left off because the chart is installed before
+# the Prometheus Operator's CRDs exist. PodMonitors here select the pods directly, so no
+# Service is needed, and Argo CD applies them once the CRDs are there.
+#
+# Prometheus selects PodMonitors from every namespace without a release label (see
+# prometheus.prometheusSpec.*SelectorNilUsesHelmValues in ../values.yaml).
+#
+# Ports (checked against the rendered chart 1.20.2): the agent serves its own metrics on
+# `prometheus` (9962) and the Hubble flow metrics on `hubble-metrics` (9965); the operator on
+# `prometheus` (9963). Envoy is off (kubernetes/bootstrap/cilium/values.yaml).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cilium-agent
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: cilium-agent-monitor
+    app.kubernetes.io/part-of: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      k8s-app: cilium
+  podMetricsEndpoints:
+    - port: prometheus
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: hubble
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: hubble-monitor
+    app.kubernetes.io/part-of: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      k8s-app: cilium
+  podMetricsEndpoints:
+    - port: hubble-metrics
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cilium-operator
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: cilium-operator-monitor
+    app.kubernetes.io/part-of: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cilium-operator
+  podMetricsEndpoints:
+    - port: prometheus
+      path: /metrics
+      interval: 30s

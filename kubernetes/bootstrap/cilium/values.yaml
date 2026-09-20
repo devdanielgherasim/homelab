@@ -26,6 +26,14 @@ operator:
   # One control-plane node: the default of 2 replicas has anti-affinity and
   # would leave the second pod Pending.
   replicas: 1
+  rollOutPods: true
+  prometheus:
+    enabled: true
+  dashboards:
+    enabled: true
+    namespace: monitoring
+    annotations:
+      grafana_folder: Cilium
   resources:
     requests:
       cpu: 50m
@@ -56,8 +64,41 @@ cni:
 envoy:
   enabled: false
 
+# Metrics. Only the endpoints and the Grafana dashboards are switched on here, not the
+# ServiceMonitors: this chart is installed before Argo CD and before the Prometheus
+# Operator's CRDs exist, so a ServiceMonitor here would fail on a cluster built from zero.
+# The scrape configuration is in Git under kubernetes/platform/observability/monitors/
+# (PodMonitors, applied by Argo CD once the CRDs are there). The dashboards must be in the
+# `monitoring` namespace, which is the only one the Grafana sidecar reads (the platform
+# stage creates it before this release).
+prometheus:
+  enabled: true
+dashboards:
+  enabled: true
+  namespace: monitoring
+  annotations:
+    grafana_folder: Cilium
+
+# Restart the agents by themselves when the ConfigMap changes: Helm does not, and the agents
+# keep the old setting (seen with l2announcements, ADR-0015).
+rollOutCiliumPods: true
+
 hubble:
   enabled: true
+  # Flow metrics add a lot of series; the list is short on purpose. Watch the Prometheus
+  # memory limit (kubernetes/platform/observability/README.md) before adding more.
+  metrics:
+    enabled:
+      - "dns:query;ignoreAAAA"
+      - drop
+      - tcp
+      - flow
+      - icmp
+    dashboards:
+      enabled: true
+      namespace: monitoring
+      annotations:
+        grafana_folder: Cilium
   relay:
     enabled: true
     # TLS between Hubble clients (the UI, the CLI) and the relay. The Hubble

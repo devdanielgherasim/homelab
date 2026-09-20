@@ -21,6 +21,11 @@ resource "helm_release" "cilium" {
   atomic          = true
   cleanup_on_fail = true
   timeout         = 600
+
+  # The chart creates the Grafana dashboards as ConfigMaps in `monitoring`, which the
+  # namespace resource creates (secrets.tf). It needs no CNI, so this ordering is safe on a
+  # cluster that has none yet.
+  depends_on = [kubernetes_namespace_v1.monitoring]
 }
 
 # Addresses for LoadBalancer Services. They are real LAN addresses, so they come from

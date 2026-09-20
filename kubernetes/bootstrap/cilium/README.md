@@ -42,8 +42,8 @@ false` (istio-cni chains its own configuration, which Cilium must not delete).
 **After an upgrade that changes the ConfigMap, restart the agents**
 (`kubectl -n kube-system rollout restart ds/cilium`). Helm does not do it, and the agents
 keep the old setting; the log line `Mismatch found` from the config drift checker shows it.
-The chart can do it itself (`rollOutCiliumPods: true`, checked in `helm show values` for
-1.20.2); it is not switched on yet because the change restarts every agent once.
+The chart does it itself with `rollOutCiliumPods: true` (checked in `helm show values` for
+1.20.2), which is now set: the agents carry a checksum of the ConfigMap as an annotation.
 
 ## Install
 
@@ -98,7 +98,9 @@ tested either.
 
 ## Known follow-ups
 
-- Hubble Relay's server TLS is off (Helm prints a warning). It is only
-  reachable inside the cluster, but enabling
-  `hubble.relay.tls.server.enabled` is on the hardening list.
-- Hubble metrics are disabled until the observability stack (phase 8) exists.
+- Hubble Relay's server TLS is on (ADR-0013); mutual TLS is off so the UI can connect.
+- Metrics: the endpoints and the Grafana dashboards are on in these values, and the scrape
+  configuration (`PodMonitor`s) is in `kubernetes/platform/observability/monitors/`. The chart's
+  own `ServiceMonitor`s stay off because this chart is installed before the Prometheus Operator's
+  CRDs exist. `rollOutCiliumPods` and `operator.rollOutPods` are on, so a ConfigMap change restarts
+  the agents by itself.
