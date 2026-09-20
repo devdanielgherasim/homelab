@@ -71,3 +71,32 @@ Policies live in `kubernetes/platform/policies/kyverno/`. Uninstalling needs the
 configurations removed (the chart's pre-delete hook does it; whether Argo CD 3.5 runs
 that hook has to be checked, and until then it is a manual step). Kyverno 1.19 is not documented
 as tested on Kubernetes 1.37, like the other components (see `STATUS.md`).
+
+## Measured cost of the install (2026-09-20)
+
+Taken on the running cluster before Kyverno and once it was `Synced/Healthy` with no policy yet:
+
+| | Before | After |
+|---|---|---|
+| `kube-apiserver` memory | 1,148 MiB | **1,612 MiB (+464 MiB, +40%)** |
+| API server heap in use | 774 MiB | 1,129 MiB |
+| `cp01` memory | 65% (2,487 MiB) | **74% (2,843 MiB)** of 3,915 MiB |
+| CRDs | 48 | 68 |
+| Kyverno pods | none | admission 62 MiB, reports 33 MiB |
+| Applications, Prometheus targets | 16, 27 up | 17 `Synced/Healthy`, 27 up |
+
+The pods are cheap; the cost is on the control plane. Most likely it is the CRD schemas (5.8 MiB,
+above all the two legacy types the controllers insist on) plus the watches of the controllers;
+the two were not measured separately, so this is an inference, not a finding. The resource
+webhooks are empty until a policy
+exists (Kyverno registers them on demand), so requests are not affected yet; the webhooks that are
+registered (`failurePolicy: Fail`) cover only Kyverno's own policy and exception objects, not
+workloads. Latency per request was not measurable without a policy and will be measured once
+policies exist.
+
+The consequence that matters for planning: the control plane, already raised to 4 GiB, is at 74%
+and the host has about 2 GiB free, so **anything else that brings many CRDs (the Trivy operator
+would) has to be weighed against this number first**. Two ways to make room without adding memory
+to the host: take 512 MiB from a worker (about 55-60% used) and give it to `cp01`, or replace
+Kyverno by Kubernetes' own `ValidatingAdmissionPolicy`, which needs no CRDs of its own and covers
+the first five rules here (no policy reports or exceptions, though).
