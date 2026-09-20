@@ -15,10 +15,12 @@
   become: true
   register: kubelet_server_tls_stat
 
-- name: Upload the kubelet configuration to the cluster for nodes that join later
-  # The kubelet-config ConfigMap is what `kubeadm join` reads. It is refreshed from the same
-  # kubeadm-config that carries the KubeletConfiguration document, only when it does not have
-  # the setting yet.
+- name: Give nodes that join later the same setting
+  # `kubeadm join` reads the kubelet-config ConfigMap. It is patched directly, not re-uploaded
+  # with `kubeadm init phase upload-config`: that command reads the kubeadm-config file on the
+  # control plane, which is the OLD rendering on a cluster that has not been through
+  # roles/kubeadm_init since the template gained the KubeletConfiguration document (found when
+  # the rollout left the ConfigMap unchanged). Only when the ConfigMap lacks the setting.
   when: "'k8s_control_plane' in group_names"
   block:
     - name: Read the kubelet-config ConfigMap
@@ -31,11 +33,30 @@
       check_mode: false # read-only
       register: kubelet_server_tls_configmap
 
-    - name: Refresh it from the kubeadm configuration
+    - name: Add the setting to the ConfigMap
+      # The current content is kept and one line is added, so nothing else in the ConfigMap
+      # changes. The newline is a variable because Jinja does not turn a backslash-n inside a
+      # string literal into a line break (the first version of this task wrote the two characters
+      # into the ConfigMap; found by rendering it against the real content before running it),
+      # while a YAML double-quoted scalar does.
+      vars:
+        kubelet_server_tls_nl: "\n"
+        kubelet_server_tls_patch: >-
+          {{ {'data': {'kubelet': [kubelet_server_tls_configmap.stdout | trim, 'serverTLSBootstrap: true', ''] | join(kubelet_server_tls_nl)}} | to_json }}
       ansible.builtin.command:
-        cmd: >-
-          kubeadm init phase upload-config kubelet
-          --config {{ kubelet_server_tls_kubeadm_config }}
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ kubelet_server_tls_admin_conf }}"
+          - -n
+          - kube-system
+          - patch
+          - configmap
+          - kubelet-config
+          - --type
+          - merge
+          - -p
+          - "{{ kubelet_server_tls_patch }}"
       become: true
       changed_when: true
       when: "'serverTLSBootstrap: true' not in kubelet_server_tls_configmap.stdout"

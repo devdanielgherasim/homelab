@@ -1,6 +1,5 @@
 ---
-# Where kubeadm keeps the kubelet's configuration on a node, and the kubeadm configuration
-# on the control plane (roles/kubeadm_init renders it there).
+# Where kubeadm keeps the kubelet's configuration on a node, and the admin kubeconfig on the
+# control plane (used to read and patch the kubelet-config ConfigMap).
 kubelet_server_tls_kubelet_config: /var/lib/kubelet/config.yaml
-kubelet_server_tls_kubeadm_config: /etc/kubernetes/kubeadm-config.yaml
 kubelet_server_tls_admin_conf: /etc/kubernetes/admin.conf

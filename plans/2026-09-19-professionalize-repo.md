@@ -341,11 +341,28 @@ serving certificates from the cluster CA (serverTLSBootstrap) and something to a
   `metrics-server` with values under `kubernetes/platform/system/`, chart repositories in the
   `platform` project, converge test in `scripts/test-roles.sh` (runs in CI; Docker is not
   available on this machine).
-- [ ] M2. Push; Argo CD installs the approver and metrics-server (idle until the nodes have
-  certificates from the cluster CA).
-- [ ] M3. Canary: `k8s-kubelet-tls.yml --limit worker02` (check mode first). Verify the request is
-  approved, the certificate is signed by the cluster CA with the node's IP, the node stays `Ready`.
-- [ ] M4. The other nodes, one at a time; `kubectl top nodes` and `kubectl top pods` work.
+- [x] M2. Pushed `1b9764b`; Argo CD installed the approver and metrics-server. CI failed once on
+  a mistake in my new converge test (a redirection done by the host shell, not the container),
+  fixed in `e2efb48`; the role itself passed every check.
+- [x] M3. Canary on `worker02`, with the owner's approval: the CSR was `Approved` in 4 s, the
+  certificate is issued by `CN=kubernetes` with `DNS:worker02` and the node's IP, `openssl
+  verify` OK, node `Ready` in 3 s, its 11 pods untouched (0 restarts), the metrics API turned
+  `True` and `kubectl top` showed the node. The first `openssl s_client` probes from WSL
+  returned nothing (before and after), so the certificate was read on the node instead.
+- [x] M4. `worker01`, then `cp01`, one at a time, with the owner's approval: same result on both
+  (CSR approved, issuer `CN=kubernetes`, node `Ready`, 13 and 9 pods `Running`), `kubectl top
+  nodes` shows all three nodes, 27 of 27 Prometheus targets `up`, Applications `Synced/Healthy`.
+  Every kubelet certificate is valid for a year and renewed by the approver.
+  - Defect found by that run: the kubelet-config ConfigMap did NOT get the setting, although the
+    task reported `changed`, and the next run changed `cp01` again. `kubeadm init phase
+    upload-config` reads the kubeadm-config file on the control plane, which is still the old
+    rendering (only `kubeadm_init` refreshes it). Fixed by patching the ConfigMap directly. The
+    first version of that patch wrote a literal backslash-n instead of a line break (Jinja does
+    not expand it in a string literal); caught by rendering the exact expression against the real
+    ConfigMap, then fixed with a real newline variable. The converge test checks both.
+  - Open: apply the fixed role once on `cp01` (it patches the ConfigMap, no kubelet restart) and
+    check the ConfigMap; `cp01` is at 77% memory (2.2 of 2.9 GiB, `kube-apiserver` 1.3 GiB), worth
+    watching.
 - [ ] M5. Prometheus's kubelet monitor without `insecureSkipVerify`; targets stay `up`.
 - [ ] M6. Optional, separate approval (restarts the API server): `--kubelet-certificate-authority`
   on the API server, closing CIS 1.2.5. Prove the whole with a rebuild? Only if the owner wants it.

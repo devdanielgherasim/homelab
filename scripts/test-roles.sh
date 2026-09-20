@@ -211,8 +211,9 @@ fi
 # --------------------------------------------------------------- kubelet_server_tls
 echo "== kubelet_server_tls"
 # A kubelet configuration as kubeadm writes it (without the setting), a stand-in kubelet service
-# that systemd really restarts, and stand-ins for kubectl and kubeadm that record what the role
-# asks of the cluster: the ConfigMap starts without the setting, and "kubeadm" adds it.
+# that systemd really restarts, and a stand-in for kubectl that records what the role asks of
+# the cluster: the ConfigMap (a file) starts without the setting, `get` prints it and `patch`
+# logs the patch and adds the setting.
 docker exec "$NAME" bash -euc '
   mkdir -p /var/lib/kubelet
   printf "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nrotateCertificates: true\nruntimeRequestTimeout: 0s\n" > /var/lib/kubelet/config.yaml
@@ -221,10 +222,17 @@ docker exec "$NAME" bash -euc '
   systemctl daemon-reload
   systemctl start kubelet
   printf "rotateCertificates: true\n" > /tmp/kubelet-cm
-  : > /tmp/kubeadm-calls
-  printf "#!/bin/sh\ncat /tmp/kubelet-cm\n" > /usr/local/bin/kubectl
-  printf "#!/bin/sh\necho \"\$*\" >> /tmp/kubeadm-calls\nprintf \"serverTLSBootstrap: true\\\\n\" >> /tmp/kubelet-cm\n" > /usr/local/bin/kubeadm
-  chmod +x /usr/local/bin/kubectl /usr/local/bin/kubeadm
+  : > /tmp/kubectl-patches
+  cat > /usr/local/bin/kubectl <<"STUB"
+#!/bin/sh
+case " $* " in
+  *" patch "*)
+    printf "%s\n" "$*" >> /tmp/kubectl-patches
+    printf "serverTLSBootstrap: true\n" >> /tmp/kubelet-cm ;;
+  *) cat /tmp/kubelet-cm ;;
+esac
+STUB
+  chmod +x /usr/local/bin/kubectl
   printf "%s\n" "- hosts: localhost" "  gather_facts: false" "  roles: [kubelet_server_tls]" > /tmp/kst.yml
 '
 run_kst() {
@@ -240,14 +248,19 @@ run_kst >"$logdir/kst-run1.log" 2>&1 || { cat "$logdir/kst-run1.log"; fail "kube
   || fail "kubelet_server_tls: the kubelet configuration lost its root-only mode"
 [ "$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)" != "$pid_before" ] \
   || fail "kubelet_server_tls: the kubelet was not restarted after the change"
-[ "$(docker exec "$NAME" cat /tmp/kubeadm-calls)" = "init phase upload-config kubelet --config /etc/kubernetes/kubeadm-config.yaml" ] \
-  || fail "kubelet_server_tls: the ConfigMap was not refreshed from the kubeadm configuration"
+[ "$(docker exec "$NAME" bash -c 'wc -l < /tmp/kubectl-patches')" = "1" ] \
+  || fail "kubelet_server_tls: the ConfigMap was not patched exactly once"
+docker exec "$NAME" grep -q -e 'patch configmap kubelet-config' /tmp/kubectl-patches \
+  || fail "kubelet_server_tls: the patch does not target the kubelet-config ConfigMap"
+# The patch keeps what was in the ConfigMap and adds the setting, nothing else.
+docker exec "$NAME" grep -q -e '"kubelet": *"rotateCertificates: true\\nserverTLSBootstrap: true\\n"' /tmp/kubectl-patches \
+  || fail "kubelet_server_tls: the patch does not keep the current content and add the setting"
 pid_after="$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)"
 run_kst >"$logdir/kst-run2.log" 2>&1 || { cat "$logdir/kst-run2.log"; fail "kubelet_server_tls: second run failed"; }
 grep -Eq 'changed=0 ' "$logdir/kst-run2.log" || { cat "$logdir/kst-run2.log"; fail "kubelet_server_tls: not idempotent"; }
 [ "$(docker exec "$NAME" systemctl show -p MainPID --value kubelet)" = "$pid_after" ] \
   || fail "kubelet_server_tls: an idempotent run restarted the kubelet"
-[ "$(docker exec "$NAME" bash -c 'wc -l < /tmp/kubeadm-calls')" = "1" ] \
-  || fail "kubelet_server_tls: the ConfigMap was refreshed again although it already had the setting"
+[ "$(docker exec "$NAME" bash -c 'wc -l < /tmp/kubectl-patches')" = "1" ] \
+  || fail "kubelet_server_tls: the ConfigMap was patched again although it already had the setting"
 
 echo "PASS: guest_hardening, tailscale, etcd_backup and kubelet_server_tls converge, are idempotent and refuse bad input"
