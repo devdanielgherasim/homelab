@@ -371,6 +371,54 @@ serving certificates from the cluster CA (serverTLSBootstrap) and something to a
 - [ ] M6. Optional, separate approval (restarts the API server): `--kubelet-certificate-authority`
   on the API server, closing CIS 1.2.5. Prove the whole with a rebuild? Only if the owner wants it.
 
+### R. A second Proxmox node, and worker02 moved to it (owner's request, 2026-09-20)
+
+Why: the control plane is at 74% of 4 GiB after Kyverno and the first host has about 2 GiB left,
+so nothing more can grow there. The owner's spare PC (Intel Core i5-3470S, 4 cores, 8 GB DDR3,
+SSD) becomes a second, standalone Proxmox node (no cluster: two nodes would lose quorum every time
+one is switched off) and `worker02` moves to it, keeping its name, VMID and address. Both machines
+are switched on together, so the cluster is only degraded while one of them boots. The Windows PC
+is out of scope for now.
+
+What the hardware means (i5-3470S, Ivy Bridge, 2012): VT-x, AES-NI and SSE4.2 (Envoy needs it),
+so Proxmox and Istio run; no AVX2, so a binary built for x86-64-v3 would crash there. The VM module
+uses CPU type `host` on the reasoning "single physical host": that stops being true, so the worker
+on the second node gets a fixed baseline type (`x86-64-v2-AES`). 4 threads: the host keeps one,
+the worker gets 2 vCPUs. 8 GB: about 6.5 GB for VMs; a 16 GB DDR3 upgrade is cheap if it is tight.
+
+- [x] R1. Owner: BIOS (Intel VT-x on), install Proxmox VE 9.2 from the ISO (ext4/LVM-thin, not
+  ZFS: 8 GB), hostname `pve02`, a static address outside the DHCP range, same gateway. Gives the
+  address and root access for the bootstrap. Not automatable (ADR of the first host: the one
+  manual step).
+- [x] R2. Code, offline and validated: `tofu_inventory` exposes which Proxmox host each VM is on;
+  `proxmox_vm_startup` and `proxmox_backup` act only on the VMs of their own host (today they
+  assume one node and would fail on the second); `pve02` in the inventory (`proxmox` group);
+  OpenTofu with a second provider alias, `node` per worker (default `pve01`), one module call per
+  node (a provider cannot be chosen per `for_each` item), CA bundle for two Proxmox CAs; ADR-0020;
+  tests for the inventory change.
+  Done 2026-09-20 (uncommitted): `node` per worker and `secondary_proxmox` in OpenTofu, `workers_secondary`
+  module call with the fixed CPU type `x86-64-v2-AES`, `proxmox_host` in the inventory, per-host filtering
+  in `proxmox_vm_startup` and `proxmox_backup`, per-host CA files plus a bundle, a pool step that skips VMs
+  the host does not have (a bug the bootstrap of `pve02` found), ADR-0020, tests in `scripts/test-roles.sh`
+  (CI only: Docker is not available locally, so the new block was run against a stand-in for `docker`,
+  and the roles against two stubbed hosts). The plan for one host is unchanged, state addresses included.
+- [ ] R3. Bootstrap `pve02`. Done and approved stage by stage: network check, `api_token` (user, role,
+  pool, token; the secret is in a root-only file, never in chat), `ssh_key_add`, `firewall_rules`
+  (permissive), `tls_ca` (CA file and bundle), template 9000 (in the pool). Left: `firewall_enforce`
+  and `ssh_lockdown`, last and separately. Found on the way: the firewall role writes `policy_in` and
+  `policy_out` to `host.fw`, where Proxmox rejects them (both nodes), so `firewall_enforce` would not
+  enforce as documented: fix it before using it.
+- [ ] R4. Capacity check before touching anything: what worker02's pods use against what worker01
+  can take (the platform's working set is about 3.9 GiB, one worker has 3.5 GiB, so moving pods
+  onto worker01 may not fit). If it does not fit, scale down the optional workloads first.
+- [ ] R5. Move `worker02`: cordon and drain, delete the node, plan and apply (destroys the VM on
+  `pve01`, creates it on `pve02` with the same name, VMID and address), Ansible guest stages and
+  join, uncordon. The old VM is stopped, not destroyed, until the new one is verified.
+- [ ] R6. Verify: node `Ready` on the new host, Cilium 3/3, the certificate request approved,
+  metrics, pods rescheduled, Prometheus targets, then destroy the old VM. Give `cp01` more memory
+  (6 GiB, restart about 50 s) and record the new sizing table.
+- [ ] R7. Document: runbook for a node on a second host, STATUS, `infrastructure.md`.
+
 ### K. Kyverno (G5 step 2, 2026-09-20; ADR-0019)
 
 Admission policy for what Pod Security admission and network policy do not cover: pinned image
@@ -383,7 +431,12 @@ namespaces. Audit first, fail open.
   (checked on the render). Application, values and ADR-0019 (Proposed) written.
   - WRONG in that design, found by the rollout: I had switched the legacy CRDs off to save 2.8
     MiB of schema. Kyverno 1.19.1 does not start without them.
-- [ ] K2. Installed (`660da69`), then repaired: (a) the admission controller crash-looped
+- [x] K2. Installed (`660da69`), then repaired (`34414c3`); now `Synced/Healthy`, 17 Applications
+  healthy, 27 of 27 targets up, no errors in Kyverno's logs, resource webhooks empty until a
+  policy exists. MEASURED COST: kube-apiserver 1,148 -> 1,612 MiB (+464 MiB), cp01 65% -> 74%,
+  CRDs 48 -> 68; the Kyverno pods are only 95 MiB. Consequence: the control plane is now the
+  constraint (see ADR-0019). Left to check: what Argo CD does with the pre-delete hook. What
+  was found and fixed: (a) the admission controller crash-looped
   ("sanity checks failed ... CRD clusterpolicies.kyverno.io ... not found"), no webhook was
   registered so nothing was cut; the two legacy CRDs are switched back on (20 CRDs, about 5.8
   MiB); (b) 11 CRDs `OutOfSync`, the diff being two empty maps (`labels: {}`, `annotations: {}`),

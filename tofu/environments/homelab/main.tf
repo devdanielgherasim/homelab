@@ -45,16 +45,48 @@ module "cp01" {
   tags            = ["homelab", "control-plane"]
 }
 
+locals {
+  # A worker is on the second Proxmox node only when it names a node other than the primary one.
+  primary_workers   = { for name, w in var.workers : name => w if w.node == null || w.node == var.proxmox_node_name }
+  secondary_workers = { for name, w in var.workers : name => w if !(w.node == null || w.node == var.proxmox_node_name) }
+}
+
 # The worker pool. One module instance per entry of var.workers, so adding or
-# removing a worker is a change to that map and nothing else.
+# removing a worker is a change to that map and nothing else. A provider cannot be
+# chosen per for_each item, so the workers of each Proxmox node are their own module
+# call (below for the second node); the two are the same module with another provider.
 module "workers" {
   source   = "../../modules/proxmox-vm"
-  for_each = var.workers
+  for_each = local.primary_workers
 
   name      = each.key
   vmid      = each.value.vmid
   node_name = var.proxmox_node_name
   pool_id   = var.proxmox_pool
+
+  cores     = each.value.cores
+  memory    = each.value.memory
+  disk_size = each.value.disk_size
+
+  ip_address = each.value.ip_address
+  gateway    = var.network_gateway
+
+  ssh_public_keys = var.ssh_public_keys
+  dns_servers     = var.dns_servers
+  tags            = ["homelab", "worker"]
+}
+
+# The workers placed on the second, standalone Proxmox node: same module, its own provider.
+module "workers_secondary" {
+  source    = "../../modules/proxmox-vm"
+  for_each  = local.secondary_workers
+  providers = { proxmox = proxmox.secondary }
+
+  name      = each.key
+  vmid      = each.value.vmid
+  node_name = each.value.node
+  pool_id   = var.proxmox_pool
+  cpu_type  = var.secondary_cpu_type
 
   cores     = each.value.cores
   memory    = each.value.memory

@@ -12,9 +12,11 @@ Groups:
   k8s_workers          the workers
   k8s_nodes            control plane and workers
 
-Host variables: ansible_host, ansible_user, vmid, node_role.
+Host variables: ansible_host, ansible_user, vmid, node_role and proxmox_host (the Proxmox
+node the VM is on, which is also that host's name in the static inventory; left out when
+the OpenTofu state predates it).
 
-The Proxmox host is not a VM and stays in the static hosts.yml next to this file
+The Proxmox hosts are not VMs and stay in the static hosts.yml next to this file
 (Ansible reads both). The script only reads OpenTofu's state; it never contacts
 Proxmox and needs no credentials.
 
@@ -72,6 +74,8 @@ def build(nodes):
             "vmid": node["vm_id"],
             "node_role": role,
         }
+        if node.get("proxmox_host"):
+            inventory["_meta"]["hostvars"][name]["proxmox_host"] = node["proxmox_host"]
         inventory["homelab_vms"]["hosts"].append(name)
         for group in ROLE_GROUPS[role]:
             inventory.setdefault(group, {"hosts": []})["hosts"].append(name)

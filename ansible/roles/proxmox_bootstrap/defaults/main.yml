@@ -50,9 +50,16 @@ proxmox_bootstrap_opentofu_datastore_role: "PVEDatastoreUser"
 # bridge default if that ever changes from vmbr0/localnetwork.
 proxmox_bootstrap_sdn_zone: "localnetwork"
 proxmox_bootstrap_opentofu_sdn_role: "PVESDNUser"
-# Where the Proxmox cluster CA (a public certificate) is saved on the machine
-# running Ansible. Outside the repository.
-proxmox_bootstrap_ca_local_path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab/pve-root-ca.pem"
+# Where the CA of each Proxmox host (a public certificate) is saved on the machine running
+# Ansible. Outside the repository. Standalone nodes each have their own CA, so each host has
+# its own file: `pve-root-ca.pem` for the first host of the `proxmox` group (the name the
+# single-host setup always used) and `<host>-root-ca.pem` for the others.
+proxmox_bootstrap_ca_dir: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab"
+proxmox_bootstrap_ca_local_path: >-
+  {{ proxmox_bootstrap_ca_dir }}/{{ 'pve' if inventory_hostname == groups['proxmox'][0]
+                                     else inventory_hostname }}-root-ca.pem
+# All the CAs in one file, for tools that read a single bundle (SSL_CERT_FILE for OpenTofu).
+proxmox_bootstrap_ca_bundle_path: "{{ proxmox_bootstrap_ca_dir }}/pve-root-ca-bundle.pem"
 proxmox_bootstrap_admin_ssh_pubkey_path: "~/.ssh/homelab_admin_ed25519.pub"
 # Explicit, not derived from the pubkey path via regex — a regex_replace
 # on a Jinja expression inside a YAML block scalar is fragile (backslash

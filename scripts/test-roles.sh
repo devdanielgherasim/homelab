@@ -7,7 +7,10 @@
 # checks refuse bad input.
 #
 #   tofu_inventory   builds the groups and host variables from OpenTofu's `nodes` output,
-#                    shows a new worker with no other edit, rejects an unknown role.
+#                    shows a new worker with no other edit, rejects an unknown role,
+#                    and carries the Proxmox host of each VM (`proxmox_host`).
+#   proxmox_vm_startup, proxmox_backup  with two standalone Proxmox hosts, each acts only on
+#                    the VMs on it (against stand-ins for qm, pvesh and pvesm).
 #   guest_hardening  beats a cloud-init drop-in, is idempotent, refuses a lock-out.
 #   tailscale        installs from the signed repo, enables forwarding, is idempotent,
 #                    refuses to run without routes. It never joins a tailnet here.
@@ -118,6 +121,62 @@ assert hv["worker03"] == {"ansible_host": "10.0.0.15", "ansible_user": "ubuntu",
 if docker exec -e TOFU_NODES_JSON='{"x": {"role": "gpu", "vm_id": 1, "ip_address": "10.0.0.1/24"}}' "$NAME" python3 "$inv" --list >/dev/null 2>&1; then
   fail "tofu_inventory: accepted a node with an unknown role"
 fi
+
+# ------------------------------------------------------- proxmox_vm_startup, proxmox_backup
+# Two standalone Proxmox nodes: each host acts only on the VMs OpenTofu says are on it.
+# `qm`, `pvesh` and `pvesm` are stand-ins that log their calls (there is no Proxmox here);
+# both "hosts" are this container, told apart by STUB_HOST.
+echo "== proxmox_vm_startup / proxmox_backup on two Proxmox hosts"
+docker exec "$NAME" bash -euc '
+  mkdir -p /tmp/mh/bin
+  printf "#!/bin/sh\necho \"\$STUB_HOST qm \$*\" >> \"\$STUB_LOG\"\nexit 0\n" > /tmp/mh/bin/qm
+  printf "#!/bin/sh\necho \"\$STUB_HOST pvesm \$*\" >> \"\$STUB_LOG\"\necho \"Name Type Status\"\necho \"local dir active\"\n" > /tmp/mh/bin/pvesm
+  cat > /tmp/mh/bin/pvesh <<"STUB"
+#!/bin/sh
+echo "$STUB_HOST pvesh $*" >> "$STUB_LOG"
+case "$STUB_HOST $1 $2" in
+  "pve01 get /cluster/resources") echo "[{\"vmid\":101},{\"vmid\":102},{\"vmid\":103},{\"vmid\":9000}]" ;;
+  "pve02 get /cluster/resources") echo "[{\"vmid\":104},{\"vmid\":9000}]" ;;
+  *"get /cluster/backup") echo "[]" ;;
+esac
+STUB
+  chmod +x /tmp/mh/bin/*
+  printf "[proxmox]\npve01 ansible_connection=local\npve02 ansible_connection=local\n" > /tmp/mh/inv.ini
+  cat > /tmp/mh/play.yml <<"PLAY"
+- hosts: proxmox
+  gather_facts: false
+  environment:
+    PATH: "/tmp/mh/bin:{{ lookup(\"env\", \"PATH\") }}"
+    STUB_HOST: "{{ inventory_hostname }}"
+    STUB_LOG: /tmp/mh/calls.log
+  roles:
+    - proxmox_vm_startup
+    - proxmox_backup
+PLAY
+'
+multi_host_nodes='{
+  "vpn01":    {"role": "vpn",           "proxmox_host": "pve01", "vm_id": 101, "ip_address": "10.0.0.11/24"},
+  "cp01":     {"role": "control-plane", "proxmox_host": "pve01", "vm_id": 102, "ip_address": "10.0.0.12/24"},
+  "worker01": {"role": "worker",        "proxmox_host": "pve01", "vm_id": 103, "ip_address": "10.0.0.13/24"},
+  "worker02": {"role": "worker",        "proxmox_host": "pve02", "vm_id": 104, "ip_address": "10.0.0.14/24"}
+}'
+docker exec -e TOFU_NODES_JSON="$multi_host_nodes" -e ANSIBLE_CONFIG=/repo/ansible/ansible.cfg \
+  -e ANSIBLE_LOCAL_TEMP=/tmp/.ansible -e ANSIBLE_NOCOLOR=1 -e LC_ALL=C.UTF-8 -e LANG=C.UTF-8 \
+  -e ANSIBLE_ROLES_PATH=/repo/ansible/roles "$NAME" \
+  ansible-playbook -i /tmp/mh/inv.ini -i "$inv" /tmp/mh/play.yml >"$logdir/multihost.log" 2>&1 \
+  || { cat "$logdir/multihost.log"; fail "proxmox roles on two hosts: playbook failed"; }
+docker exec -e TOFU_NODES_JSON="$multi_host_nodes" "$NAME" python3 "$inv" --list | docker exec -i "$NAME" python3 -c '
+import json, sys
+hv = json.load(sys.stdin)["_meta"]["hostvars"]
+assert hv["worker02"]["proxmox_host"] == "pve02" and hv["cp01"]["proxmox_host"] == "pve01", hv
+' || fail "tofu_inventory: proxmox_host is missing or wrong"
+mh_calls="$(docker exec "$NAME" cat /tmp/mh/calls.log)"
+echo "$mh_calls" | grep -q '^pve02 qm set 104 --startup order=3$' || fail "proxmox_vm_startup: pve02 did not order its own worker (VM 104)"
+echo "$mh_calls" | grep -q '^pve01 qm set 102 --startup order=2,up=60$' || fail "proxmox_vm_startup: pve01 did not order cp01"
+if echo "$mh_calls" | grep -qE '^pve02 qm (config|set) 10[123]'; then fail "proxmox_vm_startup: pve02 touched a VM that is on pve01"; fi
+if echo "$mh_calls" | grep -qE '^pve01 qm (config|set) 104'; then fail "proxmox_vm_startup: pve01 touched a VM that is on pve02"; fi
+echo "$mh_calls" | grep -q '^pve01 pvesh create /cluster/backup' || fail "proxmox_backup: pve01, which holds cp01, has no backup job"
+if echo "$mh_calls" | grep -qE '^pve02 pvesh create /cluster/backup'; then fail "proxmox_backup: pve02 got a backup job for a VM it does not have"; fi
 
 # ---------------------------------------------------------------- guest_hardening
 echo "== guest_hardening"

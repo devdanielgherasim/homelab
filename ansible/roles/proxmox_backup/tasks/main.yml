@@ -3,6 +3,22 @@
 # field differs, and does nothing otherwise. Uses `pvesh`, the same CLI the
 # web UI drives, so no extra Python dependency is needed on the host.
 
+- name: Read which VMs and templates exist on this Proxmox host
+  ansible.builtin.command:
+    cmd: "pvesh get /cluster/resources --type vm --output-format json"
+  changed_when: false
+  check_mode: false # read-only
+  register: proxmox_backup_local_vms
+
+# The job is a node-local object, and pvesh refuses a VMID the host does not have. With more
+# than one standalone Proxmox node, the hosts that hold none of the VMs to back up have no job.
+- name: Skip this host when none of the VMs to back up is on it
+  ansible.builtin.meta: end_host
+  when: >-
+    proxmox_backup_vmids | map('string') | list
+    | intersect(proxmox_backup_local_vms.stdout | from_json | map(attribute='vmid') | map('string') | list)
+    | length == 0
+
 - name: Require a storage that accepts backups
   ansible.builtin.command:
     cmd: "pvesm status --storage {{ proxmox_backup_storage }} --content backup"

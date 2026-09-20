@@ -33,6 +33,7 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0017](0017-network-policies-default-deny.md) | Default-deny network policies with Cilium, rolled out through audit mode | Accepted |
 | [0018](0018-kubelet-serving-certificates.md) | Kubelet serving certificates from the cluster CA, and metrics-server that verifies them | Accepted |
 | [0019](0019-kyverno-admission-policy.md) | Kyverno for admission policy: the new CEL policy type, audit first, failing open | Proposed |
+| [0020](0020-second-standalone-proxmox-node.md) | A second Proxmox node, standalone, with the workers placed per node | Proposed |
 
 New ADRs get the next sequential number and are added to this table.
 

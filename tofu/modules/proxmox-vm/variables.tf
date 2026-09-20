@@ -96,3 +96,14 @@ variable "on_boot" {
   type        = bool
   default     = true
 }
+
+variable "cpu_type" {
+  description = <<-EOT
+    QEMU CPU type. "host" exposes the physical CPU's features and is right when every VM
+    lives on one physical machine of one kind. A VM on a machine with an older CPU
+    than the others (the second Proxmox node) gets a fixed baseline such as
+    "x86-64-v2-AES", so that what runs in it does not depend on which machine it landed on.
+  EOT
+  type        = string
+  default     = "host"
+}

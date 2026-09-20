@@ -1,17 +1,24 @@
 ---
 # Idempotent: reads each VM's current `startup` setting and only changes it when
-# it differs. Runs on the Proxmox host as root.
+# it differs. Runs on the Proxmox host as root, on that host's own VMs only: with
+# more than one standalone Proxmox node, each VM belongs to the host named in its
+# `proxmox_host` variable (from the OpenTofu-generated inventory).
 
-- name: Work out the order of each VM from the inventory
+- name: Work out the order of each VM on this host from the inventory
   # Needs `vmid` and `node_role` on every lab VM, as the OpenTofu-generated
-  # inventory provides. Otherwise the explicit fallback list is used.
+  # inventory provides. A VM without `proxmox_host` (state written before a second
+  # node existed) is taken to be on this host. Otherwise the explicit fallback list is used.
   ansible.builtin.set_fact:
     proxmox_vm_startup_effective: >-
-      {{ dict(groups['homelab_vms']
-              | map('extract', hostvars, 'vmid') | list
-              | zip(groups['homelab_vms']
-                    | map('extract', hostvars, 'node_role')
+      {{ dict(proxmox_vm_startup_local | map(attribute='vmid') | list
+              | zip(proxmox_vm_startup_local | map(attribute='node_role')
                     | map('extract', proxmox_vm_startup_by_role) | list)) }}
+  vars:
+    proxmox_vm_startup_all: "{{ groups['homelab_vms'] | default([]) | map('extract', hostvars) | list }}"
+    proxmox_vm_startup_local: >-
+      {{ (proxmox_vm_startup_all | selectattr('proxmox_host', 'undefined') | list)
+         + (proxmox_vm_startup_all | selectattr('proxmox_host', 'defined')
+            | selectattr('proxmox_host', 'equalto', inventory_hostname) | list) }}
   when:
     - groups['homelab_vms'] | default([]) | length > 0
     - hostvars[groups['homelab_vms'][0]].vmid is defined

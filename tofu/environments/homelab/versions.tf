@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.8.0"
+  required_version = ">= 1.9.0" # a variable validation may refer to another variable
 
   required_providers {
     proxmox = {
@@ -22,4 +22,16 @@ provider "proxmox" {
   # environment uses (verified against the provider's clone guide — API
   # token auth alone is sufficient). Add one later only if a specific
   # feature needs it (e.g. direct file uploads).
+}
+
+# The second, standalone Proxmox node (var.secondary_proxmox). Unused, and never contacted,
+# while no worker is placed on it. Its endpoint is a variable because a provider
+# cannot read a second set of environment variables; its token comes from
+# TF_VAR_secondary_proxmox_api_token. Each node has its own CA: SSL_CERT_FILE has to
+# point at a bundle holding both (see docs/proxmox/installation.md).
+provider "proxmox" {
+  alias     = "secondary"
+  endpoint  = try(var.secondary_proxmox.endpoint, null)
+  api_token = var.secondary_proxmox_api_token
+  insecure  = var.proxmox_insecure
 }

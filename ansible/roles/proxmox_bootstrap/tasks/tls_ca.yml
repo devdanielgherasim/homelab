@@ -23,6 +23,19 @@
   check_mode: false # read-only
   register: proxmox_bootstrap_ca_fingerprint
 
+- name: Collect the CAs of all Proxmox hosts into one bundle
+  # Standalone nodes each have their own CA, and a tool that verifies the API of more than one
+  # (OpenTofu, through SSL_CERT_FILE) reads a single file. Rebuilt from every CA file present,
+  # so a host that is not in this run keeps its CA in the bundle.
+  ansible.builtin.assemble:
+    src: "{{ proxmox_bootstrap_ca_dir }}"
+    regexp: 'root-ca\.pem$'
+    dest: "{{ proxmox_bootstrap_ca_bundle_path }}"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
 - name: Show where it went and how to check it
   ansible.builtin.debug:
     msg:
@@ -30,3 +43,4 @@
       - "{{ proxmox_bootstrap_ca_fingerprint.stdout }}"
       - "Compare that fingerprint with Datacenter -> Certificates in the Proxmox UI before trusting it."
       - "Use it with: export SSL_CERT_FILE={{ proxmox_bootstrap_ca_local_path }} (and proxmox_insecure = false)."
+      - "With more than one Proxmox host, OpenTofu needs the bundle of all of them: {{ proxmox_bootstrap_ca_bundle_path }}"

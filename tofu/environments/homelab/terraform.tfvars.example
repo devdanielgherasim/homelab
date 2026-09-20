@@ -24,3 +24,15 @@ workers = {
   worker01 = { vmid = 103, ip_address = "10.10.10.13/24" }
   worker02 = { vmid = 104, ip_address = "10.10.10.14/24" }
 }
+
+# Optional: a second, standalone Proxmox node, and a worker placed on it. Its API token
+# goes in the environment (TF_VAR_secondary_proxmox_api_token), never in this file, and
+# SSL_CERT_FILE has to hold the root CA of both nodes.
+# secondary_proxmox = {
+#   node_name = "pve02"
+#   endpoint  = "https://YOUR_SECOND_PROXMOX_MGMT_IP_HERE:8006/"
+# }
+# workers = {
+#   worker01 = { vmid = 103, ip_address = "10.10.10.13/24" }
+#   worker02 = { vmid = 104, ip_address = "10.10.10.14/24", node = "pve02" }
+# }

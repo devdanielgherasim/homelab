@@ -33,7 +33,7 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   cpu {
     cores = var.cores
-    type  = "host" # single physical host, no migration target — safe to expose host CPU features
+    type  = var.cpu_type
   }
 
   memory {

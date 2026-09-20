@@ -1,7 +1,8 @@
 # Copy this file to hosts.yml in the same directory and fill in real values.
 # hosts.yml is gitignored — never commit it. See docs/security/public-repository.md.
 #
-# Only the Proxmox host is listed here. The lab VMs (vpn01, cp01 and every
+# Only the Proxmox hosts are listed here (each is a standalone node, not a Proxmox cluster:
+# two nodes would lose quorum whenever one is switched off; ADR-0020). The lab VMs (vpn01, cp01 and every
 # worker) come from tofu_inventory.py next to this file, which builds the groups
 # homelab_vms, vpn_gateway, k8s_control_plane, k8s_workers and k8s_nodes from
 # OpenTofu's `nodes` output, so a new worker needs no edit in Ansible.
@@ -17,3 +18,8 @@ proxmox:
     pve01:
       ansible_host: YOUR_PROXMOX_MGMT_IP_HERE   # e.g. 10.10.10.10 — see docs/architecture/networking.md
       ansible_user: root                         # bootstrap only — see group_vars/proxmox.yml.example
+    # A second, standalone Proxmox node. Optional: leave it out for a single-host lab. The
+    # name is what the OpenTofu `workers` map calls its `node` (pve01 by default).
+    pve02:
+      ansible_host: YOUR_SECOND_PROXMOX_MGMT_IP_HERE
+      ansible_user: root

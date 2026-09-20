@@ -71,6 +71,7 @@ variable "workers" {
     cores      = optional(number, 2)
     memory     = optional(number, 3584) # MB
     disk_size  = optional(number, 64)   # GB
+    node       = optional(string)       # Proxmox node; unset = the primary node (proxmox_node_name)
   }))
 
   validation {
@@ -94,7 +95,43 @@ variable "workers" {
   }
 
   validation {
+    condition = alltrue([
+      for name, w in var.workers :
+      w.node == null || w.node == var.proxmox_node_name || try(w.node == var.secondary_proxmox.node_name, false)
+    ])
+    error_message = "A worker's node must be the primary node (proxmox_node_name) or the secondary_proxmox node_name, and the secondary node has to be configured first."
+  }
+
+  validation {
     condition     = alltrue([for name, w in var.workers : can(cidrhost(w.ip_address, 0))])
     error_message = "Worker ip_address must be an IPv4 address in CIDR form, for example 10.10.10.13/24."
   }
+}
+
+variable "secondary_proxmox" {
+  description = <<-EOT
+    A second, standalone Proxmox node (not a cluster: two nodes would lose quorum whenever one
+    is switched off). Leave null for a single-host lab. When set, a worker can be placed on it
+    with `node = "<node_name>"`. The endpoint is the address of its API, for example
+    "https://pve02.example.lan:8006/". Its API token is not a variable of this file: give it in the
+    environment as TF_VAR_secondary_proxmox_api_token.
+  EOT
+  type = object({
+    node_name = string
+    endpoint  = string
+  })
+  default = null
+}
+
+variable "secondary_proxmox_api_token" {
+  description = "API token of the second Proxmox node, as `user@realm!tokenid=secret`. From the environment (TF_VAR_secondary_proxmox_api_token), never a file in the repository."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "secondary_cpu_type" {
+  description = "QEMU CPU type for VMs on the second node. Its CPU is older than the first host's, so it gets a fixed baseline instead of `host` (Ivy Bridge: AES-NI and SSE4.2, no AVX2)."
+  type        = string
+  default     = "x86-64-v2-AES"
 }
