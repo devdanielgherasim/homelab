@@ -16,9 +16,11 @@ is about 5 GB of free RAM for the whole platform.
 Use **Cilium LB IPAM and L2 announcements**. A `CiliumLoadBalancerIPPool` defines the
 addresses; a `CiliumL2AnnouncementPolicy` selects the Services and nodes that answer ARP.
 Both are selected by the label `homelab.io/lb-pool: private`, so only the Gateway's
-Service receives an address. The pool holds real LAN addresses and is applied from a
-private inventory (`ansible/roles/cilium_lb_pool`); the policy has no addresses and is
-in Git (`kubernetes/platform/networking/`).
+Service receives an address. The pool holds real LAN addresses and is created by the
+platform stage (`tofu/environments/platform`, ADR-0016) from a private variable; the
+policy has no addresses and is in Git (`kubernetes/platform/networking/`). The pool was
+first applied by an Ansible role, replaced by the platform stage on 2026-09-20 so that
+the bootstrap has one owner.
 
 ## Alternatives considered
 

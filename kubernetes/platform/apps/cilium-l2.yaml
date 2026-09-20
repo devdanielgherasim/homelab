@@ -1,6 +1,6 @@
 # LoadBalancer announcement policy for Cilium (plain manifests from a directory of this
-# repository). The address pool is not here: it holds real LAN addresses and is applied
-# by ansible/roles/cilium_lb_pool. Cilium itself stays bootstrap-managed (ADR-0014).
+# repository). The address pool is not here: it holds real LAN addresses and is created
+# by the platform stage (tofu/environments/platform). Cilium itself stays bootstrap-managed (ADR-0014).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

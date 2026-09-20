@@ -39,30 +39,31 @@ Three more values were added for the LoadBalancer (ADR-0015) and the service mes
 balancing conflicts with Istio's traffic redirection inside pods) and `cni.exclusive:
 false` (istio-cni chains its own configuration, which Cilium must not delete).
 
-**After a `helm upgrade` that changes the ConfigMap, restart the agents**
+**After an upgrade that changes the ConfigMap, restart the agents**
 (`kubectl -n kube-system rollout restart ds/cilium`). Helm does not do it, and the agents
 keep the old setting; the log line `Mismatch found` from the config drift checker shows it.
+The chart can do it itself (`rollOutCiliumPods: true`, checked in `helm show values` for
+1.20.2); it is not switched on yet because the change restarts every agent once.
 
 ## Install
 
-Prerequisites: a cluster without a CNI, `kubectl` and `helm` pointed at it.
+Cilium is installed by the platform stage, not by hand
+([ADR-0016](../../../docs/adr/0016-platform-bootstrap-with-opentofu.md)):
+[`tofu/environments/platform/cilium.tf`](../../../tofu/environments/platform/cilium.tf) is a
+`helm_release` of chart 1.20.2 with the values file in this directory. The API server address
+(`k8sServiceHost`, network topology) comes from the private `terraform.tfvars`, so it is never
+committed. Read the plan before applying: Cilium is the cluster's network, and the release is
+`atomic`, so a failed upgrade rolls itself back.
 
 ```bash
-helm repo add cilium https://helm.cilium.io && helm repo update cilium
-
-# Only when kube-proxy is already installed (fresh clusters should be
-# created with `kubeadm init --skip-phases=addon/kube-proxy` instead):
-kubectl -n kube-system delete ds kube-proxy
-kubectl -n kube-system delete cm kube-proxy
-# then, on every node, remove its leftover rules:
-#   sudo sh -c 'iptables-save | grep -v KUBE | iptables-restore'
-
-helm upgrade --install cilium cilium/cilium --version 1.20.2 \
-  --namespace kube-system \
-  -f kubernetes/bootstrap/cilium/values.yaml \
-  --set k8sServiceHost=<control-plane-ip> \
-  --wait --timeout 10m
+cd tofu/environments/platform
+tofu plan && tofu apply
 ```
+
+The cluster must have been created without kube-proxy (`kubeadm init
+--skip-phases=addon/kube-proxy`, which `ansible/roles/kubeadm_init` does). On a cluster that still
+has it, remove it first: delete the `kube-proxy` DaemonSet and ConfigMap in `kube-system` and, on
+every node, its leftover rules (`sudo sh -c 'iptables-save | grep -v KUBE | iptables-restore'`).
 
 ## Verification
 

@@ -36,12 +36,15 @@ Only about 5 GiB of memory is free across the two workers for the whole platform
 | Prometheus | prometheus 100m/300Mi, config-reloader 10m/16Mi | 110m | 316Mi | 732Mi |
 | Prometheus Operator | 20m/48Mi | 20m | 48Mi | 128Mi |
 | kube-state-metrics | 10m/48Mi | 10m | 48Mi | 128Mi |
-| Grafana | grafana 50m/128Mi, two sidecars 10m/48Mi each | 70m | 224Mi | 512Mi |
+| Grafana | grafana 50m/192Mi, two sidecars 10m/48Mi each | 70m | 288Mi | 640Mi |
 | node-exporter (x3 nodes) | 10m/24Mi each | 30m | 72Mi | 192Mi |
-| **Total** | | **240m** | **708Mi** | **1692Mi** |
+| **Total** | | **240m** | **772Mi** | **1820Mi** |
 
-Of the 708Mi, 24Mi is the control-plane node-exporter, so the load on the two workers is 684Mi of
-requests. (The sidecars were first set to 32Mi/64Mi and were OOM-killed at start-up.) CPU limits are not set on purpose (throttling a metrics stack helps nobody). The
+Of the 772Mi, 24Mi is the control-plane node-exporter, so the load on the two workers is 748Mi of
+requests. (The sidecars were first set to 32Mi/64Mi and were OOM-killed at start-up; Grafana itself
+was first 128Mi/256Mi and measured 241Mi in use.) Measured working set after the first sync:
+Prometheus 337Mi, Grafana pod about 410Mi (grafana 241, sidecars 88 and 79), everything else under
+25Mi each. CPU limits are not set on purpose (throttling a metrics stack helps nobody). The
 Prometheus memory limit (700Mi) is the one to watch: memory grows with the number of series. If it
 is OOM-killed after Cilium and Istio start shipping ServiceMonitors, raise the limit first, then the
 request.

@@ -11,7 +11,8 @@ kubeProxyReplacement: true
 # Without kube-proxy the in-cluster `kubernetes` Service does not work during
 # bootstrap, so the agent must reach the API server directly. The host is the
 # control-plane address of this lab, which is real network topology and is
-# therefore passed at install time (--set k8sServiceHost=...), never committed.
+# therefore passed by the platform stage from a private variable (k8s_service_host in
+# tofu/environments/platform), never committed.
 k8sServicePort: 6443
 
 ipam:
@@ -34,8 +35,9 @@ operator:
 
 # LoadBalancer addresses on the LAN without MetalLB (ADR-0015): one node claims each
 # address with ARP. Needs kubeProxyReplacement (set above). The address pool and the
-# announcement policy live outside this file: the pool has real LAN addresses
-# (ansible/roles/cilium_lb_pool) and the policy is in kubernetes/platform/networking/.
+# announcement policy live outside this file: the pool has real LAN addresses (created
+# by the platform stage from a private variable) and the policy is in
+# kubernetes/platform/networking/.
 l2announcements:
   enabled: true
 

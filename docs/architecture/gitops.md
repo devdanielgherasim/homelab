@@ -33,7 +33,7 @@ state (see [`AGENTS.md`](../../AGENTS.md)).
 
 ```text
 kubernetes/
-├── bootstrap/   # applied by hand once: Argo CD (values, namespace, projects, root app), Cilium
+├── bootstrap/   # applied by tofu/environments/platform (ADR-0016): Argo CD (values, namespace, projects, root app), Cilium
 ├── platform/
 │   └── apps/    # one Argo CD Application per file; the root application watches this directory
 └── apps/        # values and manifests of the workloads (kubernetes/apps/<name>/)

@@ -1,5 +1,5 @@
-# The AppProjects themselves, managed from Git. They were applied by hand once (they
-# have to exist before any Application can use them); from then on a change to
+# The AppProjects themselves, managed from Git. They are applied once by the platform stage
+# (tofu/environments/platform; they have to exist before any Application can use them); from then on a change to
 # kubernetes/bootstrap/argocd/projects.yaml, for example allowing a new chart
 # repository, reaches the cluster by way of Git like everything else.
 #

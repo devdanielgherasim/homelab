@@ -61,5 +61,14 @@ resource "kubectl_manifest" "argocd_root" {
   force_conflicts   = true
   apply_only        = true
 
+  # Once Argo CD runs it owns this object and writes its sync status into it, which changes
+  # the hash of the live object (yaml_incluster) and would show as drift in every plan.
+  # Verified: with this line, four plans in a row after Argo CD refreshes the object are
+  # empty; without it the plan shows a change each time. OpenTofu warns that the element is
+  # "redundant" because the attribute is computed, but it does suppress the diff.
+  lifecycle {
+    ignore_changes = [yaml_incluster]
+  }
+
   depends_on = [kubectl_manifest.argocd_projects]
 }

@@ -198,9 +198,11 @@ grafana:
       resource: configmap
       alertmanager:
         enabled: false
+  # Measured after the first sync: 241Mi in use with the 23 provisioned dashboards, so the
+  # first limit of 256Mi left no headroom.
   resources:
     requests:
       cpu: 50m
-      memory: 128Mi
+      memory: 192Mi
     limits:
-      memory: 256Mi
+      memory: 384Mi

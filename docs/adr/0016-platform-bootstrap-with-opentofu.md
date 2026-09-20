@@ -60,9 +60,12 @@ Argo CD.
 ## Consequences
 
 The bootstrap is reviewable (`tofu plan`), repeatable and importable, and the manual steps
-in the READMEs disappear. The running cluster is adopted with `tofu import`, not rebuilt.
-Applying the stage rotates the Argo CD admin password and recreates the Grafana Secret;
-Argo CD restarts its server pod once.
+in the READMEs disappear. The running cluster was adopted with `import` blocks, not rebuilt
+(2026-09-20: 10 objects imported, 2 generated passwords added, nothing destroyed; the Cilium
+and Argo CD Helm releases went to revisions 4 and 2 with unchanged values and no agent
+restart). The adoption rotated the Argo CD admin password and replaced the Grafana Secret's
+password. The `import` file was removed afterwards, because an `import` block for an object
+that does not exist fails and would break a bootstrap from zero.
 
 Costs: a second state file to protect and back up (encrypted, but the passphrase must
 be stored somewhere safe outside the repository); Cilium is now changed through a tofu

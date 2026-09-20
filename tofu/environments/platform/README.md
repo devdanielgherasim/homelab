@@ -41,11 +41,12 @@ Passwords: `tofu output -raw argocd_admin_password` and `tofu output -raw grafan
 
 ## Adopting a cluster that was installed by hand
 
-`imports.tf` holds `import` blocks for every object this stage owns. On the running cluster the
-first plan reads them into the state (an in-place update of the Helm releases with unchanged
-values, the new generated passwords, no destroy). Argo CD's admin password is rotated by that
-apply and the Grafana Secret gets a new password. On a fresh cluster the blocks find nothing and
-do nothing. Delete `imports.tf` once the adoption has been applied.
+The running cluster was adopted on 2026-09-20 with `import` blocks (one per object this stage
+owns, in an `imports.tf` that is in the history of commit `dbcebaa`): 10 objects imported, 2
+generated passwords added, 10 in-place updates, nothing destroyed. The file was deleted
+afterwards on purpose: OpenTofu fails when an `import` block points at an object that does not
+exist, so keeping it would break the bootstrap of a fresh cluster. To adopt another cluster that
+was installed by hand, restore that file from history for one apply.
 
 ## Two owners, one chart
 

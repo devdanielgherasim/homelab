@@ -1,5 +1,5 @@
 # Argo CD manages its own installation: the chart and version are pinned here and the
-# values come from the same file that was used for the bootstrap `helm install`, so
+# values come from the same file that the platform stage used to install it, so
 # the running instance and Git cannot drift apart silently.
 #
 # Safeguards for a self-managed controller:

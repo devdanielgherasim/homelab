@@ -311,18 +311,33 @@ helm, kubernetes, kubectl and random providers, run after Ansible has built the 
   chart version read from `platform/apps/argocd.yaml`, generated admin password),
   AppProjects and root Application from the existing YAML files, LB pool from private
   tfvars, `monitoring` namespace and `grafana-admin` Secret (`random_password`).
-- [ ] P5. Adopt the running cluster: `tofu import`, then a plan that shows only the
+- [x] P5. Adopt the running cluster: `tofu import`, then a plan that shows only the
   expected differences; apply with the owner's approval (Argo CD admin password is
   rotated by this apply, Grafana Secret is recreated).
-  - Plan read 2026-09-20 (read-only, `imports.tf`): 5 import, 2 add (the two generated
-    passwords), 5 change, 0 destroy. Helm releases show a values diff that is only the
-    import artifact (same content). Next: the owner approves the apply. Private inputs
-    (`terraform.tfvars`, state passphrase in `~/.tofu-platform-passphrase` in WSL) exist
-    locally; the passphrase must be copied to a password manager.
+  - DONE 2026-09-20 with the owner's approval: `Apply complete! 10 imported, 2 added,
+    10 changed, 0 destroyed`. Cilium revision 4, Argo CD revision 2, nodes `Ready`, all
+    Applications `Synced/Healthy`, no agent restart. New Argo CD password logs in (HTTP
+    200), a wrong one is refused (401); `grafana-admin` equals the tofu output; the state
+    file is encrypted (no plaintext password markers). Idempotence: the plan is empty,
+    also after Argo CD refreshes the root Application (needs `ignore_changes` on
+    `yaml_incluster` for that object, see the comment in `argocd.tf`).
+  - My summary before the apply said "5 import / 5 change"; the real numbers were 10 / 10
+    (the first, failed plan had not included the `kubectl` objects). The apply guard
+    caught it and I re-checked the full diff before going on.
+  - `imports.tf` deleted after the apply: an `import` block for a missing object fails,
+    which would break a bootstrap from zero.
+  - Leftover of the manual install: `argocd-initial-admin-secret` (stale password) still
+    exists. A fresh bootstrap never creates it.
+  - Private inputs (`terraform.tfvars`, state passphrase in `~/.tofu-platform-passphrase`
+    in WSL) exist locally; the passphrase must be copied to a password manager.
   - Playbook `k8s-kubeconfig.yml` (P2) is written and lint-clean, not yet run.
-- [ ] P6. Remove the manual paths: Ansible role `cilium_lb_pool`, the `kubectl`/`helm`
+- [x] P6. Remove the manual paths: Ansible role `cilium_lb_pool`, the `kubectl`/`helm`
   install steps in the READMEs, `CreateNamespace` for `monitoring` in the Application;
   update ADR-0014, STATUS, runbook.
+  - DONE 2026-09-20 (local, not pushed yet): role, playbook and variable example deleted;
+    Cilium and Argo CD READMEs, ADR-0014/0015, gitops.md, kubernetes/README.md and the
+    comments in the manifests now point to the platform stage; STATUS has a row for it.
+    No runbook yet: write it after the from-zero proof (P8), when the steps are known.
 - [ ] P7. One entry point (`make bootstrap` or a script) that chains tofu VMs, Ansible,
   kubeconfig, tofu platform.
 - [ ] P8. Proof from zero: rebuild the cluster VMs and run the chain end to end. Needs

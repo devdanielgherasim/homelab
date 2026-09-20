@@ -1,6 +1,7 @@
 # Helm values for Argo CD, chart argo/argo-cd 10.9.2 (Argo CD v3.5.3).
-# The same file is used twice: once by the bootstrap `helm install`, and then by
-# the Argo CD Application in kubernetes/platform/apps/argocd.yaml, so the running
+# The same file is used twice: once by the platform stage (tofu/environments/platform)
+# that installs Argo CD, and then by the Argo CD Application in
+# kubernetes/platform/apps/argocd.yaml, so the running
 # instance always matches what is in Git. See README.md in this directory.
 #
 # Every key was checked against `helm show values argo/argo-cd --version 10.9.2`.

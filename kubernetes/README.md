@@ -8,7 +8,7 @@ and [`../docs/architecture/gitops.md`](../docs/architecture/gitops.md).
 
 ```text
 kubernetes/
-├── bootstrap/   # applied by hand once: Cilium, and Argo CD itself (values, namespace, projects, root app)
+├── bootstrap/   # applied by tofu/environments/platform: Cilium, and Argo CD itself (values, namespace, projects, root app)
 ├── platform/
 │   └── apps/    # one Argo CD Application per file, watched by the root app-of-apps
 └── apps/        # values and manifests of the workloads

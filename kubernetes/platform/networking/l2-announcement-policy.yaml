@@ -3,7 +3,8 @@
 # Cilium's L2 announcements make one node claim each LoadBalancer IP on the LAN, so
 # no extra component (MetalLB) is needed; see ADR-0015. The addresses themselves come
 # from the CiliumLoadBalancerIPPool, which holds real LAN addresses and is therefore
-# applied from a private inventory by ansible/roles/cilium_lb_pool, not from Git.
+# created by the platform stage (tofu/environments/platform) from a private variable,
+# not from Git.
 #
 # Only Services carrying the label below are announced (the Gateway sets it through
 # its infrastructure labels). The control-plane node is left out so the API server's
