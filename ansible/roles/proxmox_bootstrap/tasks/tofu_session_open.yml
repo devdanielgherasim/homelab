@@ -1,0 +1,62 @@
+---
+# Gives OpenTofu a short-lived API token on this Proxmox host, so that nobody has to keep a
+# token secret around, paste it, or remember to revoke it. scripts/bootstrap.sh opens a
+# session before it runs OpenTofu and closes it when it ends (tofu_session_close.yml).
+#
+# The session has its own user and token, with exactly the permissions of the permanent
+# OpenTofu user (rbac.yml), and the secret goes only to a private file on the machine
+# running Ansible: never to the terminal, never to the repository.
+
+- name: Check whether the session user already exists
+  ansible.builtin.command:
+    cmd: "pveum user list --output-format json"
+  register: proxmox_bootstrap_session_users
+  changed_when: false
+  check_mode: false # read-only
+
+- name: Create the session user (if missing)
+  ansible.builtin.command:
+    cmd: >
+      pveum user add {{ proxmox_bootstrap_session_user }}
+      --comment "Temporary OpenTofu session — removed when it ends (roles/proxmox_bootstrap)"
+  changed_when: true
+  when: proxmox_bootstrap_session_user not in (proxmox_bootstrap_session_users.stdout | from_json | map(attribute='userid') | list)
+
+- name: Replace any token left by an earlier session
+  ansible.builtin.command:
+    cmd: "pveum user token remove {{ proxmox_bootstrap_session_user }} {{ proxmox_bootstrap_session_tokenid }}"
+  register: proxmox_bootstrap_session_token_remove
+  failed_when: false
+  changed_when: proxmox_bootstrap_session_token_remove.rc == 0
+
+- name: Create the session token
+  ansible.builtin.command:
+    cmd: >
+      pveum user token add {{ proxmox_bootstrap_session_user }}
+      {{ proxmox_bootstrap_session_tokenid }} --privsep 1 --output-format json
+  register: proxmox_bootstrap_session_token
+  no_log: true
+  changed_when: true
+
+- name: Give the session the permissions of the OpenTofu user, on the lab pool only
+  ansible.builtin.import_tasks: rbac.yml
+  vars:
+    proxmox_bootstrap_opentofu_pve_user: "{{ proxmox_bootstrap_session_user }}"
+    proxmox_bootstrap_opentofu_pve_tokenid: "{{ proxmox_bootstrap_session_tokenid }}"
+
+- name: Keep the secret in a private directory on this machine
+  ansible.builtin.file:
+    path: "{{ proxmox_bootstrap_session_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Save the token for this host
+  ansible.builtin.copy:
+    content: "{{ proxmox_bootstrap_session_user }}!{{ proxmox_bootstrap_session_tokenid }}={{ (proxmox_bootstrap_session_token.stdout | from_json).value }}\n"
+    dest: "{{ proxmox_bootstrap_session_dir }}/{{ inventory_hostname }}.token"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  no_log: true

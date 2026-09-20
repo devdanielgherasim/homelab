@@ -34,3 +34,14 @@
 - name: Stage 7 — fetch the cluster CA so TLS can be verified (read-only)
   ansible.builtin.import_tasks: tls_ca.yml
   tags: [tls_ca]
+
+# The two session stages are run by scripts/bootstrap.sh around every OpenTofu stage: a
+# short-lived token per Proxmox host instead of a permanent secret to keep. 'never' keeps
+# them out of a broad run.
+- name: Open a temporary OpenTofu session (additive, removed by the next stage)
+  ansible.builtin.import_tasks: tofu_session_open.yml
+  tags: [tofu_session_open, never]
+
+- name: Close the temporary OpenTofu session
+  ansible.builtin.import_tasks: tofu_session_close.yml
+  tags: [tofu_session_close, never]

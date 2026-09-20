@@ -11,6 +11,7 @@
 #                    and carries the Proxmox host of each VM (`proxmox_host`).
 #   proxmox_vm_startup, proxmox_backup  with two standalone Proxmox hosts, each acts only on
 #                    the VMs on it (against stand-ins for qm, pvesh and pvesm).
+#   proxmox_bootstrap  the temporary OpenTofu session: a private token per host, gone at the end.
 #   guest_hardening  beats a cloud-init drop-in, is idempotent, refuses a lock-out.
 #   tailscale        installs from the signed repo, enables forwarding, is idempotent,
 #                    refuses to run without routes. It never joins a tailnet here.
@@ -177,6 +178,43 @@ if echo "$mh_calls" | grep -qE '^pve02 qm (config|set) 10[123]'; then fail "prox
 if echo "$mh_calls" | grep -qE '^pve01 qm (config|set) 104'; then fail "proxmox_vm_startup: pve01 touched a VM that is on pve02"; fi
 echo "$mh_calls" | grep -q '^pve01 pvesh create /cluster/backup' || fail "proxmox_backup: pve01, which holds cp01, has no backup job"
 if echo "$mh_calls" | grep -qE '^pve02 pvesh create /cluster/backup'; then fail "proxmox_backup: pve02 got a backup job for a VM it does not have"; fi
+
+# The temporary OpenTofu session (tofu_session_open / tofu_session_close): a token per Proxmox
+# host in a private directory while it lasts, gone when it ends. Same stand-ins as above.
+echo "== proxmox_bootstrap: temporary OpenTofu session"
+docker exec "$NAME" bash -euc '
+  cat > /tmp/mh/bin/pveum <<"STUB"
+#!/bin/sh
+echo "$STUB_HOST pveum $*" >> "$STUB_LOG"
+case "$1 $2" in
+  "user list" | "acl list" | "role list") echo "[]" ;;
+  "user token") [ "$3" = add ] && echo "{\"value\":\"00000000-0000-4000-8000-000000000001\"}" ;;
+esac
+exit 0
+STUB
+  chmod +x /tmp/mh/bin/pveum
+  # the pool step reads these two
+  sed -i "s#^esac#  \"pve01 get /pools\"|\"pve02 get /pools\") echo \"[{\\\\\"poolid\\\\\":\\\\\"homelab\\\\\"}]\" ;;\n  \"pve01 get /pools/homelab\"|\"pve02 get /pools/homelab\") echo \"{\\\\\"members\\\\\":[]}\" ;;\nesac#" /tmp/mh/bin/pvesh
+  sed -i "s/^    - proxmox_vm_startup/    - proxmox_bootstrap/; /^    - proxmox_backup/d" /tmp/mh/play.yml
+'
+session_run() {
+  docker exec -e TOFU_NODES_JSON="$multi_host_nodes" -e ANSIBLE_CONFIG=/repo/ansible/ansible.cfg \
+    -e ANSIBLE_LOCAL_TEMP=/tmp/.ansible -e ANSIBLE_NOCOLOR=1 -e LC_ALL=C.UTF-8 -e LANG=C.UTF-8 \
+    -e ANSIBLE_ROLES_PATH=/repo/ansible/roles "$NAME" \
+    ansible-playbook -i /tmp/mh/inv.ini /tmp/mh/play.yml --tags "$1" \
+    -e proxmox_bootstrap_ca_dir=/tmp/mh/cfg -e proxmox_bootstrap_expected_mgmt_cidr=10.0.0.0/24
+}
+session_run tofu_session_open >"$logdir/session-open.log" 2>&1 \
+  || { cat "$logdir/session-open.log"; fail "tofu_session_open failed"; }
+[ "$(docker exec "$NAME" stat -c %a /tmp/mh/cfg/session/pve01.token)" = 600 ] || fail "the session token of pve01 is not private (mode 600)"
+docker exec "$NAME" test -s /tmp/mh/cfg/session/pve02.token || fail "no session token was saved for pve02"
+docker exec "$NAME" grep -q '^tofu-session@pve!session=' /tmp/mh/cfg/session/pve01.token || fail "the session token is not in user@realm!id=secret form"
+if grep -q '00000000-0000-4000' "$logdir/session-open.log"; then fail "the session secret was printed in the Ansible output"; fi
+session_run tofu_session_close >"$logdir/session-close.log" 2>&1 \
+  || { cat "$logdir/session-close.log"; fail "tofu_session_close failed"; }
+if docker exec "$NAME" bash -c 'ls /tmp/mh/cfg/session/*.token' >/dev/null 2>&1; then fail "the session token files were not removed"; fi
+docker exec "$NAME" grep -q '^pve02 pveum user delete tofu-session@pve' /tmp/mh/calls.log || fail "the session user was not removed from pve02"
+
 
 # ---------------------------------------------------------------- guest_hardening
 echo "== guest_hardening"

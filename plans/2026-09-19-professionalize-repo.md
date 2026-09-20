@@ -408,9 +408,17 @@ the worker gets 2 vCPUs. 8 GB: about 6.5 GB for VMs; a 16 GB DDR3 upgrade is che
   and `ssh_lockdown`, last and separately. Found on the way: the firewall role writes `policy_in` and
   `policy_out` to `host.fw`, where Proxmox rejects them (both nodes), so `firewall_enforce` would not
   enforce as documented: fix it before using it.
-- [ ] R4. Capacity check before touching anything: what worker02's pods use against what worker01
-  can take (the platform's working set is about 3.9 GiB, one worker has 3.5 GiB, so moving pods
-  onto worker01 may not fit). If it does not fit, scale down the optional workloads first.
+- [x] R4. Capacity check (2026-09-20, read-only, on the running cluster). It fits, with little to spare.
+  worker02 carries 872 MiB of memory requests that can move (13 pods, 3 are DaemonSets that stay with
+  the node): about 730 MiB actually used besides the DaemonSets, Grafana alone 447 MiB. worker01 has
+  1,574 MiB requested of 3,311 MiB allocatable, so 1,737 MiB free by requests, and 1,525 MB
+  available in the VM. After the move worker01 would hold about 2,450 MiB of requests (74%) and use
+  about 2,620 of 3,411 MB (77%). No PersistentVolumes, no PodDisruptionBudgets, no pod tied to
+  worker02 (the affinities seen are the default `kubernetes.io/os` ones). Every Deployment has one
+  replica, so each moved pod is briefly absent while it reschedules (istiod, Grafana, Kyverno
+  admission, metrics-server, the CSR approver, Argo CD's Redis). Kyverno fails open and the mesh keeps
+  its sidecar configuration meanwhile. Pods stay on worker01 after the move; nothing rebalances them
+  by itself. The state is temporary anyway: the point of the move is that `cp01` then gets 6 GiB.
 - [ ] R5. Move `worker02`: cordon and drain, delete the node, plan and apply (destroys the VM on
   `pve01`, creates it on `pve02` with the same name, VMID and address), Ansible guest stages and
   join, uncordon. The old VM is stopped, not destroyed, until the new one is verified.
@@ -418,6 +426,16 @@ the worker gets 2 vCPUs. 8 GB: about 6.5 GB for VMs; a 16 GB DDR3 upgrade is che
   metrics, pods rescheduled, Prometheus targets, then destroy the old VM. Give `cp01` more memory
   (6 GiB, restart about 50 s) and record the new sizing table.
 - [ ] R7. Document: runbook for a node on a second host, STATUS, `infrastructure.md`.
+- [ ] R8. Make adding a Proxmox node or a worker one command (owner's request, 2026-09-20: "mostly
+  automatic"). Done: the `proxmox_nodes` map with three provider slots (tested against the real
+  state: no change), a temporary OpenTofu session per Proxmox host, opened and closed by
+  `scripts/bootstrap.sh vms` (no token to keep; run for real with `--plan-only` on both hosts,
+  nothing left behind), tests in `scripts/test-roles.sh`. Left: `scripts/worker.sh add|move|remove`
+  (edits the workers, one plan and one confirmation, then drain, apply, guests, cluster, host) and
+  `scripts/proxmox-node.sh add` (inventory, the safe bootstrap stages, template, CA bundle, the
+  entry in `proxmox_nodes`), plus the runbook. The guard hook stops the assistant from running
+  node deletion and the apply, so these scripts are started by the owner with `!`, once per
+  operation.
 
 ### K. Kyverno (G5 step 2, 2026-09-20; ADR-0019)
 

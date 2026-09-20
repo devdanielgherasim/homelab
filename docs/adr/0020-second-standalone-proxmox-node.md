@@ -24,15 +24,22 @@ let OpenTofu place each worker on a node.
   Standalone nodes have no such coupling. What is given up is live migration and a single
   management view; a VM is moved by rebuilding it, which fits workers that hold no state and
   are rebuilt from Git anyway.
-- **One OpenTofu state, two providers.** `secondary_proxmox` (node name and API endpoint) and its
-  token (`TF_VAR_secondary_proxmox_api_token`, from the environment) configure a second provider
-  alias. A provider cannot be chosen per `for_each` item, so the workers on the second node are
-  a second call of the same module (`workers_secondary`), and a worker chooses its node with
-  `node = "pve02"`. Unset means the first node, so a single-host lab changes nothing (the plan
+- **One OpenTofu state, one provider per node.** The nodes besides the primary one are the map
+  `proxmox_nodes` (name, API endpoint, slot, CPU type). A provider cannot be created per map
+  entry and cannot be chosen per `for_each` item, so there are three fixed provider slots and
+  one module call of the same VM module per slot (`workers_node1..3`): up to three more nodes,
+  by adding an entry, and a fourth needs one more slot in the code. The slot is the node's
+  identity in the state and does not change once it holds VMs. A worker chooses its node with
+  `node = "pve02"`; unset means the primary node, so a single-host lab changes nothing (the plan
   for that case was checked to be identical, the state addresses included).
-- **A fixed CPU type on the second node.** The VM module used `host` on the reasoning that there
-  was one physical host. Workers on the older node get `x86-64-v2-AES`, so what runs in them does
-  not depend on features the newer CPU has; the first node keeps `host`.
+- **No token to keep.** `scripts/bootstrap.sh` opens a temporary OpenTofu session on every host of
+  the `proxmox` inventory group before the VM stage (a short-lived user and token with the
+  permissions of the OpenTofu role, on the lab pool only), hands the secrets to OpenTofu through
+  the environment (`TF_VAR_proxmox_node_tokens`) and removes them when the stage ends, also when it
+  fails. Adding a node needs no secret handling.
+- **A fixed CPU type on the extra nodes.** The VM module used `host` on the reasoning that there
+  was one physical host. Workers on an older node get `x86-64-v2-AES` by default, so what runs in
+  them does not depend on features the newer CPU has; the primary node keeps `host`.
 - **Each node has its own CA**, so `SSL_CERT_FILE` points at a bundle of both. The bootstrap role
   saves one CA file per host and rebuilds the bundle.
 - **Ansible acts per node.** The generated inventory carries `proxmox_host` for every VM, and the

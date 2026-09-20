@@ -1,0 +1,24 @@
+---
+# Ends the session opened by tofu_session_open.yml: the token and the user are removed from
+# Proxmox and the secret file is deleted. Safe to run when there is nothing to remove.
+
+- name: Remove the session token
+  ansible.builtin.command:
+    cmd: "pveum user token remove {{ proxmox_bootstrap_session_user }} {{ proxmox_bootstrap_session_tokenid }}"
+  register: proxmox_bootstrap_session_token_remove
+  failed_when: false
+  changed_when: proxmox_bootstrap_session_token_remove.rc == 0
+
+- name: Remove the session user
+  ansible.builtin.command:
+    cmd: "pveum user delete {{ proxmox_bootstrap_session_user }}"
+  register: proxmox_bootstrap_session_user_delete
+  failed_when: false
+  changed_when: proxmox_bootstrap_session_user_delete.rc == 0
+
+- name: Delete the secret file of this host
+  ansible.builtin.file:
+    path: "{{ proxmox_bootstrap_session_dir }}/{{ inventory_hostname }}.token"
+    state: absent
+  delegate_to: localhost
+  become: false
