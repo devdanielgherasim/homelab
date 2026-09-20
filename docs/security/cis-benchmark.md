@@ -33,7 +33,9 @@ with a server-side dry run), and audit records contain no Secret bodies.
 
 ## Accepted failures
 
-- **1.2.5** `--kubelet-certificate-authority`: needs `serverTLSBootstrapping`
+- **1.2.5** `--kubelet-certificate-authority`: the kubelets now serve certificates from the
+  cluster CA (ADR-0018, 2026-09-20), which was the missing prerequisite; what is left is to add
+  the flag to the API server, a separate change that restarts it. Originally: needs `serverTLSBootstrapping`
   and a certificate-request approver. Deferred until GitOps; see ADR-0013.
 - **4.3.1** kube-proxy metrics bind address: kube-proxy is not installed
   (Cilium replaces it).

@@ -46,7 +46,9 @@ Result after applying it to the live cluster: 76 passes and 2 failures (see
 
 ## Left out on purpose
 
-- **CIS 1.2.5** (`--kubelet-certificate-authority`). It needs kubelet serving
+- **CIS 1.2.5** (`--kubelet-certificate-authority`). *Update 2026-09-20: the kubelet
+  serving certificates and the approver now exist, see ADR-0018; only the API server flag
+  is left.* It needed kubelet serving
   certificates signed by the cluster CA, which means `serverTLSBootstrapping`
   plus something to approve the resulting certificate requests, including the
   yearly renewals. That is one more component to run; it is revisited when the

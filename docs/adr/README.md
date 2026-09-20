@@ -31,10 +31,10 @@ detail. Use `.claude/skills/create-adr/SKILL.md` (or `/adr`) to create one.
 | [0015](0015-loadbalancer-cilium-l2.md) | LoadBalancer addresses from Cilium (LB IPAM + L2 announcements), not MetalLB | Accepted |
 | [0016](0016-platform-bootstrap-with-opentofu.md) | Platform bootstrap (Cilium, Argo CD, secrets) with OpenTofu, not by hand | Accepted |
 | [0017](0017-network-policies-default-deny.md) | Default-deny network policies with Cilium, rolled out through audit mode | Accepted |
-| [0018](0018-kubelet-serving-certificates.md) | Kubelet serving certificates from the cluster CA, and metrics-server that verifies them | Proposed |
+| [0018](0018-kubelet-serving-certificates.md) | Kubelet serving certificates from the cluster CA, and metrics-server that verifies them | Accepted |
 
 New ADRs get the next sequential number and are added to this table.
 
-ADRs 0001-0007 and 0014-0017 are implemented and in use. 0008 (platform layer not built
+ADRs 0001-0007 and 0014-0018 are implemented and in use. 0008 (platform layer not built
 yet) stays **Proposed** until the corresponding
 component is deployed and the decision is confirmed.

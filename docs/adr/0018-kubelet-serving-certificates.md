@@ -1,6 +1,6 @@
 # 0018. Kubelet serving certificates from the cluster CA, and metrics-server that verifies them
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-20
 
 ## Context
@@ -60,3 +60,30 @@ repository, so the IP addresses in a request are not checked against a range (th
 still authenticated as that node). `bypassDnsResolution` is on, because node names are not in DNS.
 Metrics-server 0.9.0 and the approver 1.2.15 are not documented as tested on Kubernetes 1.37,
 like Cilium, Argo CD and Istio (see `STATUS.md`).
+
+## Result (2026-09-20)
+
+Accepted after the rollout. The kubelets were moved one at a time (a canary on `worker02`, then
+`worker01`, then `cp01`). On every node the certificate request was approved within seconds, the
+certificate is issued by `CN=kubernetes` with the node's name and IP as subject alternative names
+(read on the node; `openssl verify` against the cluster CA is OK), the node stayed `Ready` and
+all of its pods kept running with no restart. `kubectl top nodes` and `kubectl top pods` work
+(metrics-server verifies the kubelets with the cluster CA, 20 MiB in use, no scrape failures in
+ten minutes), and Prometheus scrapes the nine kubelet targets with verification on (27 of 27
+targets `up`, no certificate errors); no ServiceMonitor or PodMonitor in the cluster has
+verification switched off. The approver uses 9 MiB.
+
+What the rollout found in the role that was written for it, and fixed:
+
+- The task that was meant to update the `kubelet-config` ConfigMap did nothing useful: it used
+  `kubeadm init phase upload-config`, which reads the kubeadm-config file on the control plane,
+  and that file is still the old rendering on a cluster that has not been through `kubeadm_init`
+  since the template changed. The role now patches the ConfigMap directly.
+- The first version of that patch wrote a literal backslash-n instead of a line break, which
+  would have given a node that joins later an invalid kubelet configuration. It was caught by
+  rendering the exact expression against the real ConfigMap before running it, and the converge
+  test now checks the patch.
+
+Still open, on purpose: CIS 1.2.5 needs `--kubelet-certificate-authority` on the API server, which
+restarts it; it is a separate change. The certificate path of a cluster built from zero (the
+kubelets ask before the approver exists) has been reasoned about but not rebuilt.

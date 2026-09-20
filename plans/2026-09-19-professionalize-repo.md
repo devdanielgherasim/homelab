@@ -360,10 +360,14 @@ serving certificates from the cluster CA (serverTLSBootstrap) and something to a
     first version of that patch wrote a literal backslash-n instead of a line break (Jinja does
     not expand it in a string literal); caught by rendering the exact expression against the real
     ConfigMap, then fixed with a real newline variable. The converge test checks both.
-  - Open: apply the fixed role once on `cp01` (it patches the ConfigMap, no kubelet restart) and
-    check the ConfigMap; `cp01` is at 77% memory (2.2 of 2.9 GiB, `kube-apiserver` 1.3 GiB), worth
-    watching.
-- [ ] M5. Prometheus's kubelet monitor without `insecureSkipVerify`; targets stay `up`.
+  - Then the fixed role was applied on `cp01` (`cdcda03`): the ConfigMap got exactly one line
+    (49 lines, nothing removed, parses as `KubeletConfiguration`), the kubelet was not restarted
+    (same PID), a second run over all nodes changed nothing.
+  - Watch: `cp01` is at 80% memory (2.3 of 2.9 GiB, `kube-apiserver` 1.3 GiB).
+- [x] M5. Prometheus's kubelet monitor without `insecureSkipVerify` (`4d77f15`): 9 of 9 kubelet
+  targets and 27 of 27 in total `up`, no x509 errors, cAdvisor data flows, no ServiceMonitor or
+  PodMonitor in the cluster skips verification. ADR-0018 Accepted, STATUS and the CIS notes
+  updated.
 - [ ] M6. Optional, separate approval (restarts the API server): `--kubelet-certificate-authority`
   on the API server, closing CIS 1.2.5. Prove the whole with a rebuild? Only if the owner wants it.
 
