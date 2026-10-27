@@ -66,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: '.'
@@ -74,6 +74,6 @@ jobs:
           output: trivy-results.sarif
           exit-code: '0' # report-only until findings are triaged; tighten later
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           sarif_file: trivy-results.sarif
